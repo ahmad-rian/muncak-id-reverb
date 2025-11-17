@@ -1,0 +1,272 @@
+<x-layout.app>
+    <div class="container mx-auto px-4 py-8 pt-24" x-data="streamViewer({{ $stream->id }}, '{{ $guestUsername }}')">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Video Player Section -->
+            <div class="lg:col-span-2">
+                <!-- Video Container -->
+                <div class="bg-gray-900 rounded-lg overflow-hidden aspect-video relative">
+                    <video id="remoteVideo" autoplay playsinline class="w-full h-full object-contain"></video>
+
+                    <!-- Stream Offline Overlay -->
+                    <div x-show="!isLive" class="absolute inset-0 flex items-center justify-center bg-gray-900">
+                        <div class="text-center text-white">
+                            <svg class="w-20 h-20 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <h3 class="text-xl font-semibold mb-2">Stream Offline</h3>
+                            <p class="text-gray-400">Broadcaster sedang tidak streaming</p>
+                        </div>
+                    </div>
+
+                    <!-- Live Badge -->
+                    <div x-show="isLive" class="absolute top-4 left-4">
+                        <span class="badge badge-error flex items-center gap-2 text-white">
+                            <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                            LIVE
+                        </span>
+                    </div>
+
+                    <!-- Viewer Count -->
+                    <div class="absolute top-4 right-4">
+                        <span class="badge badge-neutral flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+                            </svg>
+                            <span x-text="viewerCount"></span>
+                        </span>
+                    </div>
+
+                    <!-- Quality Selector -->
+                    <div x-show="isLive" class="absolute bottom-4 right-4">
+                        <select x-model="quality" @change="changeQuality()" class="select select-sm bg-black/50 text-white border-0">
+                            <option value="360p">360p</option>
+                            <option value="720p">720p</option>
+                            <option value="1080p">1080p</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Stream Info -->
+                <div class="mt-4 card bg-base-100 shadow-md">
+                    <div class="card-body">
+                        <h1 class="text-2xl font-bold">{{ $stream->title }}</h1>
+
+                        @if($stream->description)
+                            <p class="mt-2 text-gray-600">{{ $stream->description }}</p>
+                        @endif
+
+                        <div class="mt-4 flex items-center gap-4">
+                            <img src="{{ $stream->user->getAvatarUrl() }}" alt="{{ $stream->user->name }}" class="w-12 h-12 rounded-full">
+                            <div class="flex-1">
+                                <p class="font-semibold">{{ $stream->user->name }}</p>
+                                <p class="text-sm text-gray-600">
+                                    @if($stream->isLive())
+                                        Started <span x-text="streamDuration"></span> ago
+                                    @else
+                                        Offline
+                                    @endif
+                                </p>
+                            </div>
+
+                            @if($stream->mountain)
+                                <div class="flex items-center gap-2 text-sm text-gray-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    <span>{{ $stream->mountain->nama }}</span>
+                                </div>
+                            @endif
+
+                            @if($stream->location)
+                                <div class="flex items-center gap-2 text-sm text-gray-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                                    </svg>
+                                    <span>{{ $stream->location }}</span>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Section -->
+            <div class="lg:col-span-1">
+                <div class="card bg-base-100 shadow-xl h-[600px] flex flex-col">
+                    <div class="card-body p-4 flex flex-col h-full">
+                        <h3 class="card-title text-lg mb-3">Live Chat</h3>
+
+                        <!-- Chat Messages -->
+                        <div class="flex-1 overflow-y-auto mb-4 space-y-2" id="chatContainer">
+                            <template x-for="msg in messages" :key="msg.id">
+                                <div class="chat" :class="msg.username === username ? 'chat-end' : 'chat-start'">
+                                    <div class="chat-header text-xs opacity-50" x-text="msg.username"></div>
+                                    <div class="chat-bubble chat-bubble-primary" x-text="msg.message"></div>
+                                    <div class="chat-footer text-xs opacity-50" x-text="formatTime(msg.created_at)"></div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Chat Input -->
+                        <form @submit.prevent="sendMessage" class="flex gap-2">
+                            <input
+                                type="text"
+                                x-model="messageInput"
+                                placeholder="Type a message..."
+                                class="input input-bordered flex-1"
+                                :disabled="!isLive"
+                                maxlength="500"
+                            />
+                            <button
+                                type="submit"
+                                class="btn btn-primary"
+                                :disabled="!isLive || !messageInput.trim()"
+                            >
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                            </button>
+                        </form>
+
+                        <p class="text-xs text-body-secondary mt-2">
+                            Chatting as <span class="font-semibold" x-text="username"></span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Back Button -->
+        <div class="mt-6">
+            <a href="{{ route('live-cam.index') }}" class="btn btn-ghost">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back to Streams
+            </a>
+        </div>
+    </div>
+
+    @push('scripts')
+    <script>
+        window.streamId = {{ $stream->id }};
+
+        function streamViewer(streamId, guestUsername) {
+            return {
+                streamId: streamId,
+                username: guestUsername,
+                isLive: {{ $stream->isLive() ? 'true' : 'false' }},
+                quality: '{{ $stream->quality }}',
+                viewerCount: {{ $stream->viewer_count }},
+                messages: [],
+                messageInput: '',
+                streamDuration: '',
+                channel: null,
+
+                init() {
+                    this.loadChatHistory();
+                    this.joinStream();
+                    this.updateDuration();
+                    setInterval(() => this.updateDuration(), 1000);
+                },
+
+                joinStream() {
+                    // Join presence channel
+                    this.channel = window.Echo.join(`stream.${this.streamId}`)
+                        .here((users) => {
+                            this.viewerCount = users.length;
+                        })
+                        .joining((user) => {
+                            this.viewerCount++;
+                        })
+                        .leaving((user) => {
+                            this.viewerCount--;
+                        })
+                        .listen('StreamStopped', (e) => {
+                            this.isLive = false;
+                            alert('Stream has ended');
+                        })
+                        .listen('ChatMessageSent', (e) => {
+                            this.messages.push(e);
+                            this.$nextTick(() => this.scrollChatToBottom());
+                        })
+                        .listen('ViewerCountUpdated', (e) => {
+                            this.viewerCount = e.viewer_count;
+                        });
+                },
+
+                async loadChatHistory() {
+                    try {
+                        const response = await axios.get(`/live-cam/${this.streamId}/chat`);
+                        if (response.data.success) {
+                            this.messages = response.data.messages;
+                            this.$nextTick(() => this.scrollChatToBottom());
+                        }
+                    } catch (error) {
+                        console.error('Failed to load chat history:', error);
+                    }
+                },
+
+                async sendMessage() {
+                    if (!this.messageInput.trim()) return;
+
+                    try {
+                        const response = await axios.post(`/live-cam/${this.streamId}/chat`, {
+                            message: this.messageInput,
+                            username: this.username
+                        });
+
+                        if (response.data.success) {
+                            this.messages.push(response.data.message);
+                            this.messageInput = '';
+                            this.$nextTick(() => this.scrollChatToBottom());
+                        }
+                    } catch (error) {
+                        console.error('Failed to send message:', error);
+                        alert('Failed to send message');
+                    }
+                },
+
+                scrollChatToBottom() {
+                    const container = document.getElementById('chatContainer');
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                },
+
+                formatTime(timestamp) {
+                    const date = new Date(timestamp);
+                    return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                },
+
+                updateDuration() {
+                    const startedAt = new Date('{{ $stream->started_at }}');
+                    const now = new Date();
+                    const diff = Math.floor((now - startedAt) / 1000);
+
+                    const hours = Math.floor(diff / 3600);
+                    const minutes = Math.floor((diff % 3600) / 60);
+                    const seconds = diff % 60;
+
+                    if (hours > 0) {
+                        this.streamDuration = `${hours}h ${minutes}m`;
+                    } else if (minutes > 0) {
+                        this.streamDuration = `${minutes}m ${seconds}s`;
+                    } else {
+                        this.streamDuration = `${seconds}s`;
+                    }
+                },
+
+                changeQuality() {
+                    console.log('Quality changed to:', this.quality);
+                    // WebRTC quality change will be implemented here
+                }
+            }
+        }
+    </script>
+
+    <!-- Load viewer MSE module -->
+    @vite('resources/js/live-cam/viewer-mse.js')
+    @endpush
+</x-layout.app>
