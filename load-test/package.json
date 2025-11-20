@@ -1,0 +1,16 @@
+{
+  "name": "livecam-reverb-load-test",
+  "version": "1.0.0",
+  "description": "Load testing untuk Laravel Reverb Live Cam",
+  "scripts": {
+    "test:http": "artillery run ../artillery.yaml",
+    "test:ws": "artillery run ../artillery-websocket.yaml",
+    "test:quick": "artillery run ../artillery.yaml --config config/quick.yaml",
+    "test:full": "artillery run ../artillery.yaml --config config/full.yaml",
+    "report": "artillery report"
+  },
+  "dependencies": {
+    "artillery": "^2.0.16",
+    "artillery-plugin-expect": "^2.7.0"
+  }
+}

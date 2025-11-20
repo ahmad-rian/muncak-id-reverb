@@ -128,6 +128,11 @@ class Rute extends Model implements HasMedia
         return $this->hasMany(Comment::class, 'rute_id');
     }
 
+    public function streams()
+    {
+        return $this->hasMany(Stream::class, 'jalur_id');
+    }
+
     public function updatedAtId(): Attribute
     {
         return Attribute::make(

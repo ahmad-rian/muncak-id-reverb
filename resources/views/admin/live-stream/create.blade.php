@@ -41,29 +41,30 @@
                         </label>
                     </div>
 
-                    <!-- Mountain -->
+                    <!-- Jalur Pendakian -->
                     <div class="form-control w-full">
                         <label class="label">
-                            <span class="label-text font-semibold">Mountain (Optional)</span>
+                            <span class="label-text font-semibold">Jalur Pendakian <span class="text-error">*</span></span>
                         </label>
                         <select
-                            name="mountain_id"
-                            class="select select-bordered w-full @error('mountain_id') select-error @enderror"
+                            name="jalur_id"
+                            class="select select-bordered w-full @error('jalur_id') select-error @enderror"
+                            required
                         >
-                            <option value="">-- Select Mountain --</option>
-                            @foreach ($mountains as $mountain)
-                                <option value="{{ $mountain->id }}" {{ old('mountain_id') == $mountain->id ? 'selected' : '' }}>
-                                    {{ $mountain->nama }}
+                            <option value="">-- Pilih Jalur Pendakian --</option>
+                            @foreach ($jalurs as $jalur)
+                                <option value="{{ $jalur->id }}" {{ old('jalur_id') == $jalur->id ? 'selected' : '' }}>
+                                    {{ $jalur->nama }} - {{ $jalur->gunung->nama ?? 'Unknown' }}
                                 </option>
                             @endforeach
                         </select>
-                        @error('mountain_id')
+                        @error('jalur_id')
                             <label class="label">
                                 <span class="label-text-alt text-error">{{ $message }}</span>
                             </label>
                         @enderror
                         <label class="label">
-                            <span class="label-text-alt">Select the mountain if this stream is location-specific</span>
+                            <span class="label-text-alt">Pilih jalur pendakian untuk live stream ini</span>
                         </label>
                     </div>
 

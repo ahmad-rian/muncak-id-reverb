@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChatMessage;
 use App\Models\Stream;
+use App\Models\TrailClassification;
+use App\Services\GeminiClassifier;
 use App\Services\StreamService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -17,15 +20,46 @@ class LiveCamController extends Controller
     /**
      * Display list of live streams (public viewer page)
      */
-    public function index()
+    public function index(Request $request)
     {
-        $streams = Stream::with('mountain')
+        // Section 1: Live streams only
+        $liveStreams = Stream::with(['mountain', 'jalur'])
             ->where('status', 'live')
-            
             ->latest('started_at')
-            ->paginate(12);
+            ->get();
 
-        return view('live-cam.index', compact('streams'));
+        // Section 2: Classifications (from all streams, not just live)
+        $classificationQuery = Stream::with(['mountain', 'jalur', 'latestClassification'])
+            ->whereHas('latestClassification')
+            ->latest('updated_at');
+
+        // Search by trail name or title
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $classificationQuery->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhereHas('jalur', function ($q) use ($search) {
+                        $q->where('nama', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('mountain', function ($q) use ($search) {
+                        $q->where('nama', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Filter by jalur
+        if ($request->filled('jalur_id')) {
+            $classificationQuery->where('jalur_id', $request->jalur_id);
+        }
+
+        $streams = $classificationQuery->paginate(12);
+
+        // Get only jalurs that have streams with classifications
+        $jalurs = \App\Models\Rute::whereHas('streams', function ($q) {
+            $q->whereHas('latestClassification');
+        })->orderBy('nama')->get();
+
+        return view('live-cam.index', compact('liveStreams', 'streams', 'jalurs'));
     }
 
     /**
@@ -94,17 +128,52 @@ class LiveCamController extends Controller
 
         $stream = Stream::findOrFail($id);
 
-        // Store chat message
-        $message = [
+        // Save chat message to database
+        $chatMessage = ChatMessage::create([
+            'stream_id' => $stream->id,
             'username' => $validated['username'],
             'message' => $validated['message'],
-            'created_at' => now()->toISOString(),
+        ]);
+
+        // Prepare message data for broadcast
+        $message = [
+            'username' => $chatMessage->username,
+            'message' => $chatMessage->message,
+            'created_at' => $chatMessage->created_at->toISOString(),
         ];
 
         // Broadcast via Reverb
         event(new \App\Events\ChatMessageSent($stream->id, $message));
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Get chat history (public API)
+     */
+    public function getChatHistory(int $id)
+    {
+        $stream = Stream::findOrFail($id);
+
+        // Only return chat history if stream is live
+        if ($stream->status !== 'live') {
+            return response()->json(['messages' => []]);
+        }
+
+        // Get chat messages for this stream session (since stream started)
+        $messages = ChatMessage::where('stream_id', $id)
+            ->where('created_at', '>=', $stream->started_at)
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(function ($msg) {
+                return [
+                    'username' => $msg->username,
+                    'message' => $msg->message,
+                    'created_at' => $msg->created_at->toISOString(),
+                ];
+            });
+
+        return response()->json(['messages' => $messages]);
     }
 
     /**
@@ -158,8 +227,8 @@ class LiveCamController extends Controller
      */
     public function create()
     {
-        $mountains = \App\Models\Gunung::orderBy('nama')->get();
-        return view('admin.live-stream.create', compact('mountains'));
+        $jalurs = \App\Models\Rute::with('gunung')->orderBy('nama')->get();
+        return view('admin.live-stream.create', compact('jalurs'));
     }
 
     /**
@@ -170,18 +239,22 @@ class LiveCamController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'mountain_id' => 'nullable|exists:gunung,id',
-            'location' => 'nullable|string|max:255',
+            'jalur_id' => 'required|exists:rute,id',
+            'quality' => 'required|in:360p,720p,1080p',
         ]);
+
+        // Get rute to extract mountain_id
+        $rute = \App\Models\Rute::findOrFail($validated['jalur_id']);
 
         $stream = Stream::create([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
-            'mountain_id' => $validated['mountain_id'] ?? null,
-            'location' => $validated['location'] ?? null,
+            'jalur_id' => $validated['jalur_id'],
+            'mountain_id' => $rute->gunung_id,
             'user_id' => auth()->id(),
             'status' => 'offline',
-            'quality' => '720p',
+            'quality' => $validated['quality'],
+            'stream_key' => \Str::random(32),
         ]);
 
         return redirect()->route('admin.live-stream.broadcast', $stream->id)
@@ -221,8 +294,12 @@ class LiveCamController extends Controller
 
         $stream = $this->streamService->startStream($stream, $validated['quality']);
 
-        // Broadcast stream started event
-        event(new \App\Events\StreamStarted($stream->id));
+        // Broadcast stream started event (non-blocking)
+        try {
+            event(new \App\Events\StreamStarted($stream->id));
+        } catch (\Exception $e) {
+            \Log::warning('Failed to broadcast StreamStarted event: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
@@ -249,8 +326,12 @@ class LiveCamController extends Controller
 
         $stream = $this->streamService->stopStream($stream);
 
-        // Broadcast stream stopped event
-        event(new \App\Events\StreamStopped($stream->id));
+        // Broadcast stream stopped event (non-blocking)
+        try {
+            event(new \App\Events\StreamStopped($stream->id));
+        } catch (\Exception $e) {
+            \Log::warning('Failed to broadcast StreamStopped event: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
@@ -339,6 +420,123 @@ class LiveCamController extends Controller
             ->with('success', 'Stream deleted successfully.');
     }
 
+    /**
+     * Admin: Save thumbnail
+     */
+    public function saveThumbnail(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'image' => 'required|string',
+        ]);
+
+        $stream = Stream::findOrFail($id);
+
+        // Check authorization
+        if ($stream->user_id !== auth()->id() && !auth()->user()->hasRole('admin')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        try {
+            // Decode and save image
+            $imageData = base64_decode($validated['image']);
+            $filename = "thumbnails/stream_{$id}.jpg";
+
+            // Delete old thumbnail if exists
+            if (Storage::disk('public')->exists($filename)) {
+                Storage::disk('public')->delete($filename);
+            }
+
+            Storage::disk('public')->put($filename, $imageData);
+
+            // Update stream with thumbnail URL
+            $stream->update(['thumbnail_url' => $filename]);
+
+            return response()->json([
+                'success' => true,
+                'thumbnail_url' => Storage::disk('public')->url($filename),
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Thumbnail save error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Admin: Classify frame using Gemini AI
+     */
+    public function classifyFrame(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'image' => 'required|string',
+            'timestamp' => 'required|integer',
+        ]);
+
+        $stream = Stream::with('jalur')->findOrFail($id);
+
+        // Check authorization
+        if ($stream->user_id !== auth()->id() && !auth()->user()->hasRole('admin')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        try {
+            $classifier = new GeminiClassifier();
+
+            // Save frame temporarily
+            $imagePath = $classifier->saveFrame($validated['image'], $id);
+
+            // Classify with Gemini AI
+            $result = $classifier->classifyTrailImage($validated['image']);
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $result['error'] ?? 'Classification failed',
+                ]);
+            }
+
+            // Get trail name from jalur relation
+            $trailName = $stream->jalur?->nama ?? $stream->title;
+
+            // Update or create classification (replace old one)
+            $classification = TrailClassification::updateOrCreate(
+                ['stream_id' => $stream->id],
+                [
+                    'trail_name' => $trailName,
+                    'classified_at' => now(),
+                    'weather' => $result['weather'],
+                    'crowd_density' => $result['crowd_density'],
+                    'visibility' => $result['visibility'],
+                    'confidence_weather' => $result['confidence_weather'],
+                    'confidence_crowd' => $result['confidence_crowd'],
+                    'confidence_visibility' => $result['confidence_visibility'],
+                    'image_path' => $imagePath,
+                ]
+            );
+
+            return response()->json([
+                'success' => true,
+                'classification' => [
+                    'weather' => $classification->weather,
+                    'crowd_density' => $classification->crowd_density,
+                    'visibility' => $classification->visibility,
+                    'classified_at' => $classification->classified_at_wib,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Classification error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     // Backward compatibility - WebRTC methods (deprecated)
     public function viewerReady(Request $request, int $id)
     {
@@ -348,5 +546,14 @@ class LiveCamController extends Controller
     public function sendSignal(Request $request, int $id)
     {
         return response()->json(['success' => true, 'message' => 'WebRTC is deprecated, using MSE instead']);
+    }
+
+    /**
+     * Admin: Test classification page
+     */
+    public function testClassification()
+    {
+        $streams = Stream::with(['jalur', 'mountain'])->get();
+        return view('admin.live-stream.test-classification', compact('streams'));
     }
 }

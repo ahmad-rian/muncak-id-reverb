@@ -145,10 +145,13 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
         Route::get('', [LiveStreamController::class, 'index'])->name('admin.live-stream.index');
         Route::get('create', [\App\Http\Controllers\LiveCamController::class, 'create'])->name('admin.live-stream.create');
         Route::post('', [\App\Http\Controllers\LiveCamController::class, 'store'])->name('admin.live-stream.store');
+        Route::get('test-classification', [\App\Http\Controllers\LiveCamController::class, 'testClassification'])->name('admin.live-stream.test-classification');
         Route::get('{id}/broadcast', [\App\Http\Controllers\LiveCamController::class, 'broadcast'])->name('admin.live-stream.broadcast');
         Route::post('{id}/start', [\App\Http\Controllers\LiveCamController::class, 'startStream'])->name('admin.live-stream.start');
         Route::post('{id}/stop', [\App\Http\Controllers\LiveCamController::class, 'stopStream'])->name('admin.live-stream.stop');
         Route::post('{id}/upload-chunk', [\App\Http\Controllers\LiveCamController::class, 'uploadChunk'])->name('admin.live-stream.upload-chunk');
+        Route::post('{id}/classify-frame', [\App\Http\Controllers\LiveCamController::class, 'classifyFrame'])->name('admin.live-stream.classify-frame');
+        Route::post('{id}/save-thumbnail', [\App\Http\Controllers\LiveCamController::class, 'saveThumbnail'])->name('admin.live-stream.save-thumbnail');
         Route::get('{id}/chunk/{index}', [\App\Http\Controllers\LiveCamController::class, 'getChunk'])->name('admin.live-stream.chunk');
         Route::get('{id}/status', [\App\Http\Controllers\LiveCamController::class, 'getStatus'])->name('admin.live-stream.status');
         Route::post('{id}/change-quality', [\App\Http\Controllers\LiveCamController::class, 'changeQuality'])->name('admin.live-stream.change-quality');

@@ -115,71 +115,61 @@
 
                 <!-- Chat Section (30%) -->
                 <div class="lg:col-span-4">
-                    <div class="card bg-gradient-to-br from-base-100 to-base-200 shadow-xl h-[600px] flex flex-col overflow-hidden">
-                        <!-- Chat Header -->
-                        <div class="bg-gradient-to-r from-primary to-secondary p-4">
-                            <div class="flex items-center justify-between text-primary-content">
-                                <div class="flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                    </svg>
-                                    <h3 class="font-bold text-lg">Live Chat</h3>
-                                </div>
-                                <div class="badge badge-sm bg-white/20 border-0 gap-1 text-primary-content">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                    <span id="chat-viewer-count">{{ $stream->viewer_count }}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Messages Container -->
-                        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 bg-base-100" style="scroll-behavior: smooth;">
-                            <div class="text-center text-sm text-base-content/50 py-8">
-                                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-base-200">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                    <span>You joined as <strong class="text-primary">{{ $guestUsername }}</strong></span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Chat Input -->
-                        <div class="p-4 bg-base-100 border-t border-base-300 shadow-lg">
-                            <div class="mb-2 flex items-center gap-2 text-xs text-base-content/70">
-                                <div class="avatar placeholder">
-                                    <div class="bg-primary text-primary-content rounded-full w-5 h-5">
-                                        <span class="text-xs">{{ substr($guestUsername, 0, 1) }}</span>
+                    <div class="card bg-white shadow-xl h-[600px] flex flex-col">
+                        <div class="card-body p-0 flex flex-col h-full">
+                            <!-- Chat Header -->
+                            <div class="p-4 border-b border-base-300">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="font-bold text-lg flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
+                                        Live Chat
+                                    </h3>
+                                    <div class="badge badge-sm gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                        </svg>
+                                        <span id="chat-viewer-count">{{ $stream->viewer_count }}</span>
                                     </div>
                                 </div>
-                                <span>{{ $guestUsername }}</span>
                             </div>
-                            <form id="chat-form" class="flex gap-2">
-                                <input
-                                    type="text"
-                                    id="chat-input"
-                                    placeholder="Type your message..."
-                                    class="input input-bordered flex-1 focus:input-primary"
-                                    maxlength="200"
-                                    autocomplete="off"
-                                />
-                                <button type="submit" class="btn btn-primary gap-2" id="send-button">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                    </svg>
-                                    <span class="hidden sm:inline">Send</span>
-                                </button>
-                            </form>
-                            <div class="mt-2 flex justify-between items-center text-xs text-base-content/50">
-                                <span id="char-counter" class="flex items-center gap-1">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                                    </svg>
-                                    <span>0/200</span>
-                                </span>
-                                <span class="text-xs">Press Enter to send</span>
+
+                            <!-- Messages Container -->
+                            <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3" style="scroll-behavior: smooth;">
+                                <div class="text-center text-sm text-base-content/50 py-4">
+                                    <div class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-base-200">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                        <span>Joined as <strong>{{ $guestUsername }}</strong></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Chat Input -->
+                            <div class="p-4 border-t border-base-300">
+                                <form id="chat-form" class="space-y-2">
+                                    <div class="flex gap-2">
+                                        <input
+                                            type="text"
+                                            id="chat-input"
+                                            placeholder="Type your message..."
+                                            class="input input-bordered flex-1 input-sm"
+                                            maxlength="200"
+                                            autocomplete="off"
+                                        />
+                                        <button type="submit" class="btn btn-primary btn-sm" id="send-button">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div class="flex justify-between items-center text-xs text-base-content/50">
+                                        <span>Chatting as <strong>{{ $guestUsername }}</strong></span>
+                                        <span id="char-counter">0/200</span>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     </div>

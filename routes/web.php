@@ -59,6 +59,7 @@ Route::prefix('live-cam')->name('live-cam.')->group(function () {
     Route::get('{id}/quality', [LiveCamController::class, 'getQuality'])->name('quality');
 
     // Chat routes (public - guests can chat)
+    Route::get('{id}/chat-history', [LiveCamController::class, 'getChatHistory'])->name('chat-history');
     Route::post('{id}/chat', [LiveCamController::class, 'sendChat'])->name('chat');
 
     // Viewer count tracking (public)

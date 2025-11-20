@@ -219,8 +219,8 @@ function initializeMediaSource() {
         console.log('✅ MediaSource opened');
 
         try {
-            // Use WebM with VP8 + Opus (same as broadcaster)
-            sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp8, opus"');
+            // Use WebM with VP8 only (video only, no audio)
+            sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp8"');
 
             sourceBuffer.addEventListener('updateend', () => {
                 isUpdating = false;
@@ -274,7 +274,7 @@ function startFetching() {
         // Try to fetch the next expected chunk
         const nextIndex = lastChunkIndex + 1;
         fetchAndAppendChunk(nextIndex);
-    }, 1200); // Poll every 1.2 seconds (slightly longer than 1s chunk interval)
+    }, 2400); // Poll every 2.4 seconds (slightly longer than 2s chunk interval)
 }
 
 // Fetch and append chunk
@@ -391,32 +391,51 @@ async function checkStreamStatus() {
     }
 }
 
+// Load chat history on page load
+async function loadChatHistory() {
+    try {
+        const response = await fetch(`/live-cam/${streamId}/chat-history`);
+        const data = await response.json();
+
+        if (data.messages && data.messages.length > 0) {
+            console.log(`📜 Loading ${data.messages.length} chat messages from history`);
+            data.messages.forEach(message => {
+                addChatMessage(message, true); // true = from history
+            });
+        } else {
+            console.log('📜 No chat history found');
+        }
+    } catch (err) {
+        console.error('❌ Failed to load chat history:', err);
+    }
+}
+
 // Chat functions
-function addChatMessage(message) {
+function addChatMessage(message, fromHistory = false) {
     const chatContainer = document.getElementById('chat-messages');
     if (!chatContainer) return;
 
-    // Remove welcome message if exists
+    // Remove welcome message if exists (only for first message)
     const welcomeMsg = chatContainer.querySelector('.text-center');
     if (welcomeMsg) {
         welcomeMsg.remove();
     }
 
     const messageEl = document.createElement('div');
-    messageEl.className = 'chat-message mb-3 p-3 rounded-lg bg-base-200/50 hover:bg-base-200 transition-colors';
+    messageEl.className = 'p-3 rounded-lg bg-base-100 border border-base-300';
     messageEl.innerHTML = `
-        <div class="flex items-start gap-3">
-            <div class="avatar placeholder">
-                <div class="bg-primary text-primary-content rounded-full w-8 h-8">
-                    <span class="text-xs">${escapeHtml(message.username.charAt(0).toUpperCase())}</span>
+        <div class="flex items-start gap-2">
+            <div class="avatar placeholder flex-shrink-0">
+                <div class="bg-neutral text-neutral-content rounded-full w-8 h-8">
+                    <span class="text-xs font-semibold">${escapeHtml(message.username.charAt(0).toUpperCase())}</span>
                 </div>
             </div>
             <div class="flex-1 min-w-0">
-                <div class="flex items-baseline gap-2 mb-1">
-                    <p class="text-sm font-semibold text-base-content truncate">${escapeHtml(message.username)}</p>
+                <div class="flex items-baseline justify-between gap-2 mb-1">
+                    <p class="text-sm font-semibold truncate">${escapeHtml(message.username)}</p>
                     <p class="text-xs text-base-content/50 flex-shrink-0">${formatTime(message.created_at)}</p>
                 </div>
-                <p class="text-sm text-base-content/90 break-words">${escapeHtml(message.message)}</p>
+                <p class="text-sm break-words">${escapeHtml(message.message)}</p>
             </div>
         </div>
     `;
@@ -496,10 +515,12 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         checkStreamStatus();
         notifyViewerJoined();
+        loadChatHistory();
     });
 } else {
     checkStreamStatus();
     notifyViewerJoined();
+    loadChatHistory();
 }
 
 console.log('✅ MSE Viewer initialized');

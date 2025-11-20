@@ -10,6 +10,8 @@ let isStreaming = false;
 let chunkCounter = 0;
 let echoChannel = null;
 let currentStreamId = null;
+let classificationInterval = null;
+const CLASSIFICATION_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes (testing)
 
 console.log('🎥 MSE Broadcaster module loading...');
 
@@ -91,11 +93,10 @@ function startRecording() {
             return;
         }
 
-        // Optimized settings for efficiency
+        // Optimized settings for efficiency - video only, no audio
         const options = {
-            mimeType: 'video/webm;codecs=vp8,opus',
-            videoBitsPerSecond: 800000,  // 800 Kbps - efficient for 720p
-            audioBitsPerSecond: 64000    // 64 Kbps for audio
+            mimeType: 'video/webm;codecs=vp8',
+            videoBitsPerSecond: 600000,  // 600 Kbps - more stable for 720p
         };
 
         mediaRecorder = new MediaRecorder(localStream, options);
@@ -115,9 +116,15 @@ function startRecording() {
             console.log('🛑 MediaRecorder stopped');
         };
 
-        // Record in 1-second chunks (lower latency)
-        mediaRecorder.start(1000);
-        console.log('🎬 Recording started - 1s chunks at 800 Kbps');
+        // Record in 2-second chunks (more stable, less buffering)
+        mediaRecorder.start(2000);
+        console.log('🎬 Recording started - 2s chunks at 600 Kbps (video only)');
+
+        // Capture thumbnail on first start
+        setTimeout(captureThumbnail, 2000);
+
+        // Start classification interval for AI analysis
+        startClassificationInterval();
 
     } catch (err) {
         console.error('❌ Failed to start MediaRecorder:', err);
@@ -174,6 +181,9 @@ function stopRecording() {
         mediaRecorder.stop();
     }
 
+    // Stop classification interval
+    stopClassificationInterval();
+
     isStreaming = false;
     chunkCounter = 0;
 }
@@ -228,10 +238,10 @@ async function requestMediaAccess() {
     const micSelect = document.getElementById('micSelect');
 
     try {
-        // Request camera and microphone permission
+        // Request camera permission only (no audio)
         const tempStream = await navigator.mediaDevices.getUserMedia({
             video: true,
-            audio: true
+            audio: false
         });
 
         console.log('✅ Permission granted!');
@@ -242,21 +252,19 @@ async function requestMediaAccess() {
         // Now enumerate devices with labels
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(d => d.kind === 'videoinput');
-        const audioDevices = devices.filter(d => d.kind === 'audioinput');
 
-        console.log(`📹 Found ${videoDevices.length} cameras, ${audioDevices.length} microphones`);
+        console.log(`📹 Found ${videoDevices.length} cameras`);
 
-        // Populate device selects
+        // Populate camera select
         if (cameraSelect) {
             cameraSelect.innerHTML = videoDevices.map((device, index) =>
                 `<option value="${device.deviceId}">${device.label || `Camera ${index + 1}`}</option>`
             ).join('');
         }
 
-        if (micSelect) {
-            micSelect.innerHTML = audioDevices.map((device, index) =>
-                `<option value="${device.deviceId}">${device.label || `Microphone ${index + 1}`}</option>`
-            ).join('');
+        // Hide mic select since we don't use audio
+        if (micSelect && micSelect.parentElement) {
+            micSelect.parentElement.style.display = 'none';
         }
 
         // Start camera preview
@@ -291,7 +299,6 @@ async function startCameraPreview() {
 
     const localVideo = document.getElementById('localVideo');
     const cameraSelect = document.getElementById('cameraSelect');
-    const micSelect = document.getElementById('micSelect');
     const permissionWarning = document.getElementById('permission-warning');
     const qualityInputs = document.getElementsByName('quality');
     const selectedQuality = Array.from(qualityInputs).find(input => input.checked)?.value || '720p';
@@ -305,13 +312,10 @@ async function startCameraPreview() {
     const constraints = {
         video: {
             deviceId: cameraSelect?.value ? { exact: cameraSelect.value } : undefined,
-            ...qualitySettings[selectedQuality]
+            ...qualitySettings[selectedQuality],
+            facingMode: 'user' // Front camera by default
         },
-        audio: {
-            deviceId: micSelect?.value ? { exact: micSelect.value } : undefined,
-            echoCancellation: true,
-            noiseSuppression: true
-        }
+        audio: false // No audio
     };
 
     try {
@@ -325,16 +329,182 @@ async function startCameraPreview() {
 
         if (localVideo) {
             localVideo.srcObject = localStream;
+            // Mirror the video for front camera
+            localVideo.style.transform = 'scaleX(-1)';
             await localVideo.play();
         }
 
         if (permissionWarning) permissionWarning.style.display = 'none';
 
-        console.log(`✅ Camera preview started (${selectedQuality})`);
+        console.log(`✅ Camera preview started (${selectedQuality}) - video only`);
 
     } catch (error) {
         console.error('❌ Failed to start camera preview:', error);
         if (permissionWarning) permissionWarning.style.display = 'flex';
+    }
+}
+
+// Toggle mirror camera
+function toggleMirror() {
+    const localVideo = document.getElementById('localVideo');
+    if (localVideo) {
+        const currentTransform = localVideo.style.transform;
+        localVideo.style.transform = currentTransform.includes('scaleX(-1)') ? 'scaleX(1)' : 'scaleX(-1)';
+        console.log('🔄 Mirror toggled');
+    }
+}
+
+// Capture thumbnail on stream start
+async function captureThumbnail() {
+    const localVideo = document.getElementById('localVideo');
+    if (!localVideo || !localVideo.videoWidth || !currentStreamId) {
+        console.log('⏭️ Skipping thumbnail - video not ready');
+        return;
+    }
+
+    try {
+        console.log('📸 Capturing thumbnail...');
+
+        const canvas = document.createElement('canvas');
+        canvas.width = localVideo.videoWidth;
+        canvas.height = localVideo.videoHeight;
+        const ctx = canvas.getContext('2d');
+
+        // Handle mirror transform
+        const isMirrored = localVideo.style.transform.includes('scaleX(-1)');
+        if (isMirrored) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+        ctx.drawImage(localVideo, 0, 0);
+
+        const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+        const basePath = window.location.pathname.includes('/admin/')
+            ? `/admin/live-stream/${currentStreamId}`
+            : `/live-cam/${currentStreamId}`;
+
+        const response = await fetch(`${basePath}/save-thumbnail`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ image: base64Image })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            console.log('✅ Thumbnail saved');
+        } else {
+            console.error('❌ Thumbnail save failed:', data.error);
+        }
+    } catch (error) {
+        console.error('❌ Error capturing thumbnail:', error);
+    }
+}
+
+// Capture frame for classification
+async function captureFrameForClassification() {
+    if (!localStream || !isStreaming) {
+        console.log('⏭️ Skipping classification - stream not active');
+        return;
+    }
+
+    const localVideo = document.getElementById('localVideo');
+    if (!localVideo || !localVideo.videoWidth) {
+        console.log('⏭️ Skipping classification - video not ready');
+        return;
+    }
+
+    try {
+        console.log('📸 Capturing frame for classification...');
+
+        // Create canvas to capture frame
+        const canvas = document.createElement('canvas');
+        canvas.width = localVideo.videoWidth;
+        canvas.height = localVideo.videoHeight;
+        const ctx = canvas.getContext('2d');
+
+        // Draw current video frame (handle mirror transform)
+        const isMirrored = localVideo.style.transform.includes('scaleX(-1)');
+        if (isMirrored) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+        ctx.drawImage(localVideo, 0, 0);
+
+        // Convert to base64 JPEG
+        const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+        // Send to server for classification
+        await sendFrameForClassification(base64Image);
+
+    } catch (error) {
+        console.error('❌ Error capturing frame:', error);
+    }
+}
+
+// Send frame to server for Gemini classification
+async function sendFrameForClassification(base64Image) {
+    if (!currentStreamId) {
+        console.error('❌ Stream ID not set for classification');
+        return;
+    }
+
+    const basePath = window.location.pathname.includes('/admin/')
+        ? `/admin/live-stream/${currentStreamId}`
+        : `/live-cam/${currentStreamId}`;
+
+    try {
+        const response = await fetch(`${basePath}/classify-frame`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                image: base64Image,
+                timestamp: Date.now()
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            console.log('✅ Frame classified:', data.classification);
+        } else {
+            console.error('❌ Classification failed:', data.error);
+        }
+
+    } catch (error) {
+        console.error('❌ Error sending frame for classification:', error);
+    }
+}
+
+// Start classification interval
+function startClassificationInterval() {
+    console.log(`⏰ Classification timer started (every ${CLASSIFICATION_INTERVAL_MS / 60000} minutes)`);
+
+    // Initial classification after 30 seconds
+    setTimeout(() => {
+        console.log('🚀 Running initial classification...');
+        captureFrameForClassification();
+    }, 30000);
+
+    // Then repeat every CLASSIFICATION_INTERVAL_MS
+    classificationInterval = setInterval(() => {
+        console.log('⏰ Auto-classification triggered');
+        captureFrameForClassification();
+    }, CLASSIFICATION_INTERVAL_MS);
+}
+
+// Stop classification interval
+function stopClassificationInterval() {
+    if (classificationInterval) {
+        clearInterval(classificationInterval);
+        classificationInterval = null;
+        console.log('🛑 Classification interval stopped');
     }
 }
 
@@ -345,6 +515,7 @@ window.broadcasterMSE = {
     stopRecording,
     setupCamera,
     requestMediaAccess,
+    toggleMirror,
     setLocalStream: (stream) => {
         localStream = stream;
     },

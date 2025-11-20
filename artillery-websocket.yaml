@@ -1,0 +1,110 @@
+# artillery-websocket.yaml - WebSocket Load Testing untuk Laravel Reverb
+# Testing real-time WebSocket connections
+
+config:
+  target: "https://reverb.muncak.id/"
+  phases:
+    # Light load - test basic functionality
+    - duration: 30
+      arrivalRate: 10
+      name: "Light Load"
+
+    # Medium load - normal usage
+    - duration: 60
+      arrivalRate: 50
+      name: "Medium Load"
+
+    # Heavy load - stress test
+    - duration: 120
+      arrivalRate: 100
+      name: "Heavy Load"
+
+    # Peak load - maximum capacity
+    - duration: 60
+      arrivalRate: 200
+      name: "Peak Load"
+
+  ws:
+    subprotocols:
+      - "pusher"
+
+  variables:
+    streamId: "1"
+    appKey: "muncak-reverb-key"
+
+  ensure:
+    maxErrorRate: 5
+    p95: 1000
+    p99: 2000
+
+scenarios:
+  # Scenario 1: Subscribe to stream channel
+  - name: "WebSocket - Stream Subscription"
+    weight: 60
+    engine: ws
+    flow:
+      # Connect to Reverb
+      - send:
+          channel: "stream.{{ streamId }}"
+          event: "pusher:subscribe"
+          data:
+            channel: "stream.{{ streamId }}"
+
+      # Wait for subscription confirmation
+      - think: 2
+
+      # Listen for events for 30 seconds
+      - think: 30
+
+      # Unsubscribe
+      - send:
+          channel: "stream.{{ streamId }}"
+          event: "pusher:unsubscribe"
+          data:
+            channel: "stream.{{ streamId }}"
+
+  # Scenario 2: Chat message flow
+  - name: "WebSocket - Chat Messages"
+    weight: 30
+    engine: ws
+    flow:
+      # Subscribe to channel
+      - send:
+          channel: "stream.{{ streamId }}"
+          event: "pusher:subscribe"
+          data:
+            channel: "stream.{{ streamId }}"
+
+      - think: 2
+
+      # Simulate receiving multiple chat messages
+      - loop:
+          count: 5
+          flow:
+            - think: 3
+
+      # Unsubscribe
+      - send:
+          channel: "stream.{{ streamId }}"
+          event: "pusher:unsubscribe"
+          data:
+            channel: "stream.{{ streamId }}"
+
+  # Scenario 3: Quick connect/disconnect
+  - name: "WebSocket - Quick Connect"
+    weight: 10
+    engine: ws
+    flow:
+      - send:
+          channel: "stream.{{ streamId }}"
+          event: "pusher:subscribe"
+          data:
+            channel: "stream.{{ streamId }}"
+
+      - think: 2
+
+      - send:
+          channel: "stream.{{ streamId }}"
+          event: "pusher:unsubscribe"
+          data:
+            channel: "stream.{{ streamId }}"
