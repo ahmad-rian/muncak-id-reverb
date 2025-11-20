@@ -287,10 +287,10 @@ class UserController extends Controller
 
         $filePath = 'temp/' . uniqid('photo-profile-') . '.png';
 
-        $encodedImage = $img->encodeByExtension('png');
+        $encodedImage = $img->encodeByExtension('png')->toString();
         Storage::put($filePath, $encodedImage);
 
-        $user->addMedia(storage_path("app/private/$filePath"))->toMediaCollection('photo-profile');
+        $user->addMedia(Storage::path($filePath))->toMediaCollection('photo-profile');
 
         Storage::delete($filePath);
     }
