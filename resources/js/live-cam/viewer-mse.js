@@ -63,15 +63,15 @@ channel.listenForWhisper('*', (event) => {
     console.log('🔔 Whisper event:', event);
 });
 
-window.Echo.connector.pusher.connection.bind('state_change', function(states) {
+window.Echo.connector.pusher.connection.bind('state_change', function (states) {
     console.log('🔌 Echo connection state:', states.current);
 });
 
-window.Echo.connector.pusher.connection.bind('connected', function() {
+window.Echo.connector.pusher.connection.bind('connected', function () {
     console.log('✅ Echo connected to Reverb');
 });
 
-window.Echo.connector.pusher.connection.bind('error', function(err) {
+window.Echo.connector.pusher.connection.bind('error', function (err) {
     console.error('❌ Echo connection error:', err);
 });
 
@@ -170,8 +170,14 @@ channel.listen('.viewer-count-updated', (data) => {
 
 // Listen for chat messages
 channel.listen('.chat-message', (data) => {
-    console.log('💬 Chat message:', data);
-    addChatMessage(data.message);
+    console.log('💬 Chat message received:', data);
+    // The event now sends username, message, created_at directly
+    const messageData = {
+        username: data.username,
+        message: data.message,
+        created_at: data.created_at
+    };
+    addChatMessage(messageData);
 });
 
 // Cleanup MediaSource
@@ -498,9 +504,7 @@ if (chatForm) {
             if (response.ok) {
                 const data = await response.json();
                 chatInput.value = '';
-                if (data && data.message) {
-                    addChatMessage(data.message);
-                }
+                // Don't add message locally - it will come back via broadcast
                 console.log('✅ Chat message sent');
             } else {
                 const errorText = await response.text();

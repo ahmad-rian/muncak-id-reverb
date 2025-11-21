@@ -27,6 +27,9 @@ class StreamService
     public function startStream(Stream $stream, string $quality = '720p'): Stream
     {
         DB::transaction(function () use ($stream, $quality) {
+            // Clear old chat messages from previous stream sessions
+            $stream->chatMessages()->delete();
+
             $stream->update([
                 'status' => 'live',
                 'quality' => $quality,
@@ -65,6 +68,9 @@ class StreamService
                     'peak_viewers' => $stream->viewer_count,
                 ]);
             }
+
+            // Clear chat messages when stream ends
+            $stream->chatMessages()->delete();
         });
 
         // Note: Event is broadcasted in controller, not here
@@ -104,8 +110,11 @@ class StreamService
 
     public function getStreamWithDetails(int $streamId): ?Stream
     {
-        return Stream::with(['user', 'chatMessages' => function ($query) {
-            $query->latest()->limit(50);
-        }])->find($streamId);
+        return Stream::with([
+            'user',
+            'chatMessages' => function ($query) {
+                $query->latest()->limit(50);
+            }
+        ])->find($streamId);
     }
 }

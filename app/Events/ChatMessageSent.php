@@ -27,7 +27,9 @@ class ChatMessageSent implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'message' => $this->message,
+            'username' => $this->message['username'],
+            'message' => $this->message['message'],
+            'created_at' => $this->message['created_at'],
         ];
     }
 
