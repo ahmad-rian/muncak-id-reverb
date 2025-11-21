@@ -177,7 +177,10 @@ channel.listen('.chat-message', (data) => {
         message: data.message,
         created_at: data.created_at
     };
+    console.log('💬 Processed message data:', messageData);
+    console.log('💬 Chat container exists:', !!document.getElementById('chat-messages'));
     addChatMessage(messageData);
+    console.log('💬 Message added to chat');
 });
 
 // Cleanup MediaSource

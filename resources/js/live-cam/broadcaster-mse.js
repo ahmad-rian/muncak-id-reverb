@@ -37,8 +37,15 @@ function initializeBroadcasterEcho(streamId) {
 
     // Listen for chat messages
     echoChannel.listen('.chat-message', (data) => {
-        console.log('💬 Chat message:', data);
-        addChatMessage(data.message);
+        console.log('💬 Chat message received:', data);
+        // The event now sends username, message, created_at directly
+        const messageData = {
+            username: data.username,
+            message: data.message,
+            created_at: data.created_at
+        };
+        console.log('💬 Adding to chat monitor:', messageData);
+        addChatMessage(messageData);
     });
 }
 
