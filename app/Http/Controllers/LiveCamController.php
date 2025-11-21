@@ -142,10 +142,16 @@ class LiveCamController extends Controller
             'created_at' => $chatMessage->created_at->toISOString(),
         ];
 
-        // Broadcast via Reverb
-        event(new \App\Events\ChatMessageSent($stream->id, $message));
+        try {
+            event(new \App\Events\ChatMessageSent($stream->id, $message));
+        } catch (\Throwable $e) {
+            \Log::warning('Broadcast ChatMessageSent failed: ' . $e->getMessage());
+        }
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+        ]);
     }
 
     /**

@@ -486,7 +486,11 @@ if (chatForm) {
             });
 
             if (response.ok) {
-                chatInput.value = ''; // Clear input
+                const data = await response.json();
+                chatInput.value = '';
+                if (data && data.message) {
+                    addChatMessage(data.message);
+                }
                 console.log('✅ Chat message sent');
             } else {
                 const errorText = await response.text();
