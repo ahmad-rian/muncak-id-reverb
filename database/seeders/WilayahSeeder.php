@@ -15,6 +15,17 @@ class WilayahSeeder extends Seeder
      */
     public function run(): void
     {
+        // Skip seeding if data already exists to avoid duplicate primary keys
+        $hasWilayahData = DB::table('desa')->exists()
+            || DB::table('kecamatan')->exists()
+            || DB::table('kabupaten_kota')->exists()
+            || DB::table('provinsi')->exists();
+
+        if ($hasWilayahData) {
+            $this->command->info('Wilayah data already present, skipping WilayahSeeder.');
+            return;
+        }
+
         $sqlPath = database_path('seeders/sql/wilayah-20241112.sql');
 
         if (File::exists($sqlPath)) {

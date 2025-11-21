@@ -136,14 +136,14 @@
     <div class="container relative mx-auto px-4 py-12 md:px-6 lg:px-8 xl:px-12 2xl:px-16">
       <div class="grid grid-cols-1 items-center gap-x-12 gap-y-6 md:grid-cols-2">
         <div class="grid grid-cols-2 gap-4">
-          <img class="row-span-2 h-[21rem] w-full rounded-md object-cover object-center"
-            src="https://images.unsplash.com/photo-1633512424789-9ad3655bec31?q=80&w=3264&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+          <img class="row-span-2 h-[21rem] w-full rounded-md object-cover object-center" loading="lazy" decoding="async" width="1200" height="336"
+            src="https://images.unsplash.com/photo-1633512424789-9ad3655bec31?q=60&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3"
             alt="tentang-1">
-          <img class="h-40 w-full rounded-md object-cover object-center"
-            src="https://images.unsplash.com/photo-1671965448417-0582cb361168?q=80&w=3270&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+          <img class="h-40 w-full rounded-md object-cover object-center" loading="lazy" decoding="async" width="1200" height="160"
+            src="https://images.unsplash.com/photo-1671965448417-0582cb361168?q=60&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3"
             alt="tentang-w">
-          <img class="h-40 w-full rounded-md object-cover object-center"
-            src="https://images.unsplash.com/photo-1476158085676-e67f57ed9ed7?q=80&w=2800&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+          <img class="h-40 w-full rounded-md object-cover object-center" loading="lazy" decoding="async" width="1200" height="160"
+            src="https://images.unsplash.com/photo-1476158085676-e67f57ed9ed7?q=60&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3"
             alt="tentang-3">
         </div>
         <div>

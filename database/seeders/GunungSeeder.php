@@ -18,24 +18,49 @@ class GunungSeeder extends Seeder
      */
     public function run(): void
     {
-        $sqlPath = database_path('seeders/sql/negara-20250815.sql');
-        $sql     = File::get($sqlPath);
-        DB::unprepared($sql);
+        // Negara
+        if (!DB::table('negara')->exists()) {
+            $sqlPath = database_path('seeders/sql/negara-20250815.sql');
+            $sql     = File::get($sqlPath);
+            DB::unprepared($sql);
+        } else {
+            $this->command->info('Negara data already present, skipping negara seeding.');
+        }
 
-        $sqlPath = database_path('seeders/sql/rute_tingkat_kesulitan-20250815.sql');
-        $sql     = File::get($sqlPath);
-        DB::unprepared($sql);
+        // Rute Tingkat Kesulitan
+        if (!DB::table('rute_tingkat_kesulitan')->exists()) {
+            $sqlPath = database_path('seeders/sql/rute_tingkat_kesulitan-20250815.sql');
+            $sql     = File::get($sqlPath);
+            DB::unprepared($sql);
+        } else {
+            $this->command->info('Rute Tingkat Kesulitan data already present, skipping seeding.');
+        }
 
-        $sqlPath = database_path('seeders/sql/gunung-20250815.sql');
-        $sql     = File::get($sqlPath);
-        DB::unprepared($sql);
+        // Gunung
+        if (!DB::table('gunung')->exists()) {
+            $sqlPath = database_path('seeders/sql/gunung-20250815.sql');
+            $sql     = File::get($sqlPath);
+            DB::unprepared($sql);
+        } else {
+            $this->command->info('Gunung data already present, skipping gunung seeding.');
+        }
 
-        $sqlPath = database_path('seeders/sql/rute-20250815.sql');
-        $sql     = File::get($sqlPath);
-        DB::unprepared($sql);
+        // Rute
+        if (!DB::table('rute')->exists()) {
+            $sqlPath = database_path('seeders/sql/rute-20250815.sql');
+            $sql     = File::get($sqlPath);
+            DB::unprepared($sql);
+        } else {
+            $this->command->info('Rute data already present, skipping rute seeding.');
+        }
 
-        $sqlPath = database_path('seeders/sql/point-20250815.sql');
-        $sql     = File::get($sqlPath);
-        DB::unprepared($sql);
+        // Point
+        if (!DB::table('point')->exists()) {
+            $sqlPath = database_path('seeders/sql/point-20250815.sql');
+            $sql     = File::get($sqlPath);
+            DB::unprepared($sql);
+        } else {
+            $this->command->info('Point data already present, skipping point seeding.');
+        }
     }
 }

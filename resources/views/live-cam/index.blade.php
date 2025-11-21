@@ -153,13 +153,13 @@
                                     <figure class="aspect-video">
                                         <img src="{{ Storage::disk('public')->url($stream->latestClassification->image_path) }}"
                                             alt="Klasifikasi {{ $stream->jalur?->nama ?? $stream->title }}"
-                                            class="h-full w-full object-cover">
+                                            class="h-full w-full object-cover" loading="lazy" decoding="async">
                                     </figure>
                                 @elseif($stream->thumbnail_url)
                                     <figure class="aspect-video">
                                         <img src="{{ Storage::disk('public')->url($stream->thumbnail_url) }}"
                                             alt="{{ $stream->title }}"
-                                            class="h-full w-full object-cover">
+                                            class="h-full w-full object-cover" loading="lazy" decoding="async">
                                     </figure>
                                 @endif
 
