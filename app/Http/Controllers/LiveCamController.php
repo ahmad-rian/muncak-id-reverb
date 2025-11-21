@@ -121,37 +121,44 @@ class LiveCamController extends Controller
      */
     public function sendChat(Request $request, int $id)
     {
-        $validated = $request->validate([
-            'username' => 'required|string|max:50',
-            'message' => 'required|string|max:200',
-        ]);
-
-        $stream = Stream::findOrFail($id);
-
-        // Save chat message to database
-        $chatMessage = ChatMessage::create([
-            'stream_id' => $stream->id,
-            'username' => $validated['username'],
-            'message' => $validated['message'],
-        ]);
-
-        // Prepare message data for broadcast
-        $message = [
-            'username' => $chatMessage->username,
-            'message' => $chatMessage->message,
-            'created_at' => $chatMessage->created_at->toISOString(),
-        ];
-
         try {
-            event(new \App\Events\ChatMessageSent($stream->id, $message));
-        } catch (\Throwable $e) {
-            \Log::warning('Broadcast ChatMessageSent failed: ' . $e->getMessage());
-        }
+            $validated = $request->validate([
+                'username' => 'required|string|max:50',
+                'message' => 'required|string|max:200',
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => $message,
-        ]);
+            $stream = Stream::findOrFail($id);
+
+            if ($stream->status !== 'live') {
+                return response()->json(['success' => false, 'error' => 'Stream offline'], 409);
+            }
+
+            $chatMessage = ChatMessage::create([
+                'stream_id' => $stream->id,
+                'username' => $validated['username'],
+                'message' => $validated['message'],
+            ]);
+
+            $message = [
+                'username' => $chatMessage->username,
+                'message' => $chatMessage->message,
+                'created_at' => $chatMessage->created_at->toISOString(),
+            ];
+
+            try {
+                event(new \App\Events\ChatMessageSent($stream->id, $message));
+            } catch (\Throwable $e) {
+                \Log::warning('Broadcast ChatMessageSent failed: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('sendChat failed: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => 'Failed to send message'], 500);
+        }
     }
 
     /**
@@ -205,8 +212,11 @@ class LiveCamController extends Controller
 
         $stream->refresh();
 
-        // Broadcast viewer count update
-        event(new \App\Events\ViewerCountUpdated($stream->id, $stream->viewer_count));
+        try {
+            event(new \App\Events\ViewerCountUpdated($stream->id, $stream->viewer_count));
+        } catch (\Throwable $e) {
+            \Log::warning('Broadcast ViewerCountUpdated failed: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,

@@ -80,7 +80,7 @@ let hasNotifiedPresence = false;
 async function notifyViewerJoined() {
     if (hasNotifiedPresence) return;
     try {
-        await fetch(`/live-cam/${streamId}/viewer-count`, {
+        const resp = await fetch(`/live-cam/${streamId}/viewer-count`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -88,8 +88,13 @@ async function notifyViewerJoined() {
             },
             body: JSON.stringify({ action: 'join' })
         });
-        hasNotifiedPresence = true;
-        console.log('👋 Notified viewer joined');
+        if (resp.ok) {
+            hasNotifiedPresence = true;
+            console.log('👋 Notified viewer joined');
+        } else {
+            const txt = await resp.text();
+            console.error('Failed to notify viewer joined:', resp.status, txt);
+        }
     } catch (err) {
         console.error('Failed to notify viewer joined:', err);
     }
@@ -98,7 +103,7 @@ async function notifyViewerJoined() {
 async function notifyViewerLeft() {
     if (!hasNotifiedPresence) return;
     try {
-        await fetch(`/live-cam/${streamId}/viewer-count`, {
+        const resp = await fetch(`/live-cam/${streamId}/viewer-count`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -106,7 +111,12 @@ async function notifyViewerLeft() {
             },
             body: JSON.stringify({ action: 'leave' })
         });
-        console.log('👋 Notified viewer left');
+        if (resp.ok) {
+            console.log('👋 Notified viewer left');
+        } else {
+            const txt = await resp.text();
+            console.error('Failed to notify viewer left:', resp.status, txt);
+        }
     } catch (err) {
         console.error('Failed to notify viewer left:', err);
     }
