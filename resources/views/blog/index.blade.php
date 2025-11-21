@@ -5,8 +5,8 @@
   <div>
     <img
       class="h-60 w-full object-cover object-center md:h-72 lg:h-96"
-      src="https://images.unsplash.com/photo-1661218271501-f81834ff14b0?q=60&w=1600&auto=format&fit=crop&ixlib=rb-4.0.3"
-      alt="Hero Blog" width="1600" height="384" fetchpriority="high" decoding="async">
+      src="https://images.unsplash.com/photo-1661218271501-f81834ff14b0?q=80&w=3424&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+      alt="">
   </div>
 
   <main class="container mx-auto px-4 pb-12 pt-6 md:px-6 xl:px-8">
@@ -45,7 +45,7 @@
             <a class="card card-compact rounded-lg border border-base-300 bg-base-100 shadow-md transition-colors hover:bg-base-200"
               href="{{ route('blog.slug', [$item->slug]) }}" title="{{ $item->title }}">
               <figure>
-                <img class="h-48 w-full object-cover" src="{{ $item->getImageUrl() }}" alt="{{ $item->title }}" loading="lazy" decoding="async" width="480" height="192">
+                <img class="h-48 w-full object-cover" src="{{ $item->getImageUrl() }}" alt="{{ $item->title }}">
               </figure>
               <div class="card-body">
                 <div>
