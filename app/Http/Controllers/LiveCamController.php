@@ -15,7 +15,8 @@ class LiveCamController extends Controller
 {
     public function __construct(
         protected StreamService $streamService
-    ) {}
+    ) {
+    }
 
     /**
      * Display list of live streams (public viewer page)
@@ -571,5 +572,152 @@ class LiveCamController extends Controller
     {
         $streams = Stream::with(['jalur', 'mountain'])->get();
         return view('admin.live-stream.test-classification', compact('streams'));
+    }
+
+    /**
+     * Get LiveKit token for broadcaster/viewer
+     */
+    public function getLiveKitToken(int $id)
+    {
+        $stream = Stream::findOrFail($id);
+
+        // Check authorization for broadcaster
+        if ($stream->user_id !== auth()->id() && !auth()->user()->hasRole('admin')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        try {
+            $livekitUrl = config('services.livekit.url');
+            $apiKey = config('services.livekit.api_key');
+            $apiSecret = config('services.livekit.api_secret');
+
+            if (!$livekitUrl || !$apiKey || !$apiSecret) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'LiveKit not configured'
+                ], 500);
+            }
+
+            $identity = 'broadcaster-' . auth()->id();
+            $roomName = 'stream-' . $stream->id;
+
+            // Use LiveKit SDK (correct API based on tests)
+            $options = (new \Agence104\LiveKit\AccessTokenOptions())
+                ->setIdentity($identity)
+                ->setName(auth()->user()->name ?? 'Broadcaster');
+
+            $token = new \Agence104\LiveKit\AccessToken($apiKey, $apiSecret, $options);
+
+            $videoGrant = new \Agence104\LiveKit\VideoGrant();
+            $videoGrant->setRoomName($roomName);
+            $videoGrant->setRoomJoin(true);
+            $videoGrant->setCanPublish(true);
+            $videoGrant->setCanSubscribe(true);
+
+            $token->setGrant($videoGrant);
+
+            return response()->json([
+                'success' => true,
+                'token' => $token->toJwt(),
+                'url' => $livekitUrl,
+                'room' => $roomName,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('LiveKit token generation failed: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to generate token: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get LiveKit token for viewer (public - no auth required)
+     */
+    public function getLiveKitViewerToken(int $id)
+    {
+        $stream = Stream::findOrFail($id);
+
+        try {
+            $livekitUrl = config('services.livekit.url');
+            $apiKey = config('services.livekit.api_key');
+            $apiSecret = config('services.livekit.api_secret');
+
+            if (!$livekitUrl || !$apiKey || !$apiSecret) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'LiveKit not configured'
+                ], 500);
+            }
+
+            $identity = auth()->check()
+                ? 'viewer-' . auth()->id()
+                : 'guest-' . uniqid();
+
+            $roomName = 'stream-' . $stream->id;
+
+            $options = (new \Agence104\LiveKit\AccessTokenOptions())
+                ->setIdentity($identity)
+                ->setName(auth()->check() ? auth()->user()->name : 'Guest Viewer');
+
+            $token = new \Agence104\LiveKit\AccessToken($apiKey, $apiSecret, $options);
+
+            $videoGrant = new \Agence104\LiveKit\VideoGrant();
+            $videoGrant->setRoomName($roomName);
+            $videoGrant->setRoomJoin(true);
+            $videoGrant->setCanPublish(false);
+            $videoGrant->setCanSubscribe(true);
+
+            $token->setGrant($videoGrant);
+
+            return response()->json([
+                'success' => true,
+                'token' => $token->toJwt(),
+                'url' => $livekitUrl,
+                'room' => $roomName,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('LiveKit viewer token generation failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to generate token: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update mirror state
+     */
+    public function updateMirrorState(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'is_mirrored' => 'required|boolean',
+        ]);
+
+        $stream = Stream::findOrFail($id);
+
+        // Check authorization
+        if ($stream->user_id !== auth()->id() && !auth()->user()->hasRole('admin')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        try {
+            // Broadcast mirror state change event
+            event(new \App\Events\MirrorStateChanged($stream->id, $validated['is_mirrored']));
+
+            return response()->json([
+                'success' => true,
+                'is_mirrored' => $validated['is_mirrored'],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Mirror state update failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

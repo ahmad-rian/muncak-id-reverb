@@ -7,8 +7,8 @@ export default defineConfig({
             input: [
                 'resources/css/app.css',
                 'resources/js/app.js',
-                'resources/js/live-cam/broadcaster-mse.js',
-                'resources/js/live-cam/viewer-mse.js'
+                'resources/js/live-cam/broadcaster-reverb.js',
+                'resources/js/live-cam/viewer-reverb.js'
             ],
             refresh: true,
         }),

@@ -24,7 +24,7 @@ class StreamStopped implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'stream-ended';
+        return 'StreamStopped';
     }
 
     public function broadcastWith(): array
