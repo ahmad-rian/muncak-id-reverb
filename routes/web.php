@@ -64,6 +64,9 @@ Route::prefix('live-cam')->name('live-cam.')->group(function () {
 
     // Viewer count tracking (public)
     Route::post('{id}/viewer-count', [LiveCamController::class, 'updateViewerCount'])->name('viewer-count');
+
+    // LiveKit token for viewers (public)
+    Route::get('{id}/livekit/token', [LiveCamController::class, 'getLiveKitViewerToken'])->name('livekit.token');
 });
 /**
  * Live Cam Routes --- END

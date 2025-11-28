@@ -24,7 +24,7 @@ class StreamStarted implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'stream-started';
+        return 'StreamStarted';
     }
 
     public function broadcastWith(): array

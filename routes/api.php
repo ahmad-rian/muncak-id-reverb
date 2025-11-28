@@ -15,4 +15,10 @@ Route::prefix('api/v1')->group(function () {
         Route::get('{id}.geojson', [RuteController::class, 'geojson'])->name('api.rute.geojson');
         Route::get('{id}', [RuteController::class, 'show'])->name('api.rute.show');
     });
+
+    // Classification API
+    Route::prefix('classifications')->middleware('auth')->group(function () {
+        Route::post('stream/{id}/process', [\App\Http\Controllers\LiveCamController::class, 'classifyFrame'])
+            ->name('api.classifications.process');
+    });
 });

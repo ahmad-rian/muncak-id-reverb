@@ -156,6 +156,10 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
         Route::get('{id}/status', [\App\Http\Controllers\LiveCamController::class, 'getStatus'])->name('admin.live-stream.status');
         Route::post('{id}/change-quality', [\App\Http\Controllers\LiveCamController::class, 'changeQuality'])->name('admin.live-stream.change-quality');
         Route::post('{id}/chat', [\App\Http\Controllers\LiveCamController::class, 'sendChat'])->name('admin.live-stream.chat');
+        Route::get('{id}/chat-history', [\App\Http\Controllers\LiveCamController::class, 'getChatHistory'])->name('admin.live-stream.chat-history');
+        Route::get('{id}/livekit/token', [\App\Http\Controllers\LiveCamController::class, 'getLiveKitToken'])->name('admin.live-stream.livekit.token');
+        Route::post('{id}/mirror', [\App\Http\Controllers\LiveCamController::class, 'updateMirrorState'])->name('admin.live-stream.mirror');
+        Route::post('{id}/thumbnail', [\App\Http\Controllers\LiveCamController::class, 'saveThumbnail'])->name('admin.live-stream.thumbnail');
         Route::delete('{id}', [\App\Http\Controllers\LiveCamController::class, 'destroy'])->name('admin.live-stream.destroy');
     });
 

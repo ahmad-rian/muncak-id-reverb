@@ -35,6 +35,6 @@ class ChatMessageSent implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'chat-message';
+        return 'ChatMessageSent';
     }
 }

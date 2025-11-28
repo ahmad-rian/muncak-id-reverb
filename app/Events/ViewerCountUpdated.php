@@ -34,6 +34,6 @@ class ViewerCountUpdated implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'viewer-count-updated';
+        return 'ViewerCountUpdated';
     }
 }
