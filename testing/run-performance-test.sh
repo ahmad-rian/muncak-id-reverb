@@ -27,8 +27,8 @@ echo -e "${BLUE}║     Performance Test - Research Metrics Collection        �
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${GREEN}Test Configuration:${NC}"
-echo -e "  Target: https://pusher.muncak.id"
-echo -e "  Stream: quam-modi-dolor-exercitation-voluptates-quasi-culpa-ut-fugiat-aP8DAM"
+echo -e "  Target: https://reverb.muncak.id"
+echo -e "  Stream: /live-cam/2"
 echo -e "  Results: ${RESULTS_DIR}"
 echo ""
 echo -e "${YELLOW}Research Parameters:${NC}"
@@ -95,7 +95,7 @@ collect_system_metrics() {
 # Function to monitor server metrics (if accessible)
 monitor_server_metrics() {
     local output_file=$1
-    local target_url="https://pusher.muncak.id"
+    local target_url="https://reverb.muncak.id"
     
     echo "timestamp,response_time_ms,status_code" > "${output_file}"
     
