@@ -35,31 +35,38 @@ function recordResponseMetrics(requestParams, response, context, ee, next) {
     return next();
 }
 
-// Subscribe to Pusher channel and measure connection time
-function subscribeToPusherChannel(context, events, done) {
+// Subscribe to Reverb channel and measure connection time
+function subscribeToReverbChannel(context, events, done) {
     const startTime = Date.now();
 
     try {
-        const pusher = new Pusher(context.vars.pusher_key, {
-            cluster: context.vars.pusher_cluster,
-            forceTLS: true,
-            enabledTransports: ['ws', 'wss']
+        // Initialize Pusher client for Reverb (Reverb uses Pusher protocol)
+        const pusher = new Pusher(context.vars.reverb_key || 't04ejpaztc3hvzutpy42', {
+            wsHost: context.vars.reverb_host || 'reverb.muncak.id',
+            wsPort: context.vars.reverb_port || 6001,
+            wssPort: context.vars.reverb_port || 6001,
+            forceTLS: (context.vars.reverb_scheme || 'https') === 'https',
+            enabledTransports: ['ws', 'wss'],
+            disableStats: true
         });
 
-        const streamId = context.vars.streamId || '8';
+        const streamId = context.vars.streamId || '2';
         const channelName = `stream.${streamId}`;
-        const channel = pusher.subscribe(channelName);
 
         // Track connection attempt
         connectionMetrics.totalConnections++;
 
+        // Subscribe to the channel
+        const channel = pusher.subscribe(channelName);
+
+        // Wait for subscription success
         channel.bind('pusher:subscription_succeeded', () => {
             const connectionTime = Date.now() - startTime;
 
             // Track connection establishment time
             events.emit('histogram', 'connection_establishment_time', connectionTime);
             events.emit('histogram', 'websocket_connection_latency', connectionTime);
-            events.emit('counter', 'pusher_connections_success', 1);
+            events.emit('counter', 'reverb_connections_success', 1);
 
             // Track active connections
             connectionMetrics.activeConnections++;
@@ -67,12 +74,12 @@ function subscribeToPusherChannel(context, events, done) {
             events.emit('gauge', 'active_websocket_connections', connectionMetrics.activeConnections);
 
             // Store connection info
-            context.vars.pusherChannel = channel;
-            context.vars.pusher = pusher;
-            context.vars.pusherConnectedAt = Date.now();
+            context.vars.reverbChannel = channel;
+            context.vars.reverb = pusher;
+            context.vars.reverbConnectedAt = Date.now();
 
             // Listen for chat messages
-            channel.bind('App\\\\Events\\\\ChatMessageSent', (data) => {
+            channel.bind('ChatMessageSent', (data) => {
                 const messageLatency = Date.now() - (data.timestamp || Date.now());
                 events.emit('histogram', 'chat_message_latency', messageLatency);
                 events.emit('counter', 'chat_messages_received', 1);
@@ -80,13 +87,13 @@ function subscribeToPusherChannel(context, events, done) {
             });
 
             // Listen for viewer count updates
-            channel.bind('App\\\\Events\\\\ViewerCountUpdated', (data) => {
+            channel.bind('ViewerCountUpdated', (data) => {
                 events.emit('counter', 'viewer_count_updates', 1);
                 events.emit('gauge', 'current_viewer_count', data.count || 0);
             });
 
             // Listen for quality changes
-            channel.bind('App\\\\Events\\\\QualityChanged', (data) => {
+            channel.bind('QualityChanged', (data) => {
                 events.emit('counter', 'video_quality_changes', 1);
 
                 const qualityValue = data.quality === '1080p' ? 1080 : 720;
@@ -101,7 +108,7 @@ function subscribeToPusherChannel(context, events, done) {
             });
 
             // Listen for chunk events (video streaming)
-            channel.bind('App\\\\Events\\\\NewChunkAvailable', (data) => {
+            channel.bind('NewChunkAvailable', (data) => {
                 events.emit('counter', 'video_chunks_received', 1);
 
                 // Track quality from chunk data
@@ -114,25 +121,49 @@ function subscribeToPusherChannel(context, events, done) {
             done();
         });
 
+        // Handle subscription errors
         channel.bind('pusher:subscription_error', (err) => {
-            events.emit('counter', 'pusher_connections_failed', 1);
+            console.error('[Reverb] Subscription error:', err);
+            events.emit('counter', 'reverb_connections_failed', 1);
             events.emit('counter', 'websocket_errors', 1);
             events.emit('counter', 'total_errors', 1);
             connectionMetrics.totalErrors++;
             done(err);
         });
 
+        // Track connection state
+        let connectionErrorHandled = false;
+
+        // Handle connection errors
+        pusher.connection.bind('error', (err) => {
+            console.error('[Reverb] Connection error:', err);
+            if (!connectionErrorHandled) {
+                connectionErrorHandled = true;
+                events.emit('counter', 'reverb_connections_failed', 1);
+                events.emit('counter', 'websocket_errors', 1);
+                events.emit('counter', 'total_errors', 1);
+                connectionMetrics.totalErrors++;
+                done(err);
+            }
+        });
+
+        // Log connection state changes
+        pusher.connection.bind('state_change', (states) => {
+            console.log(`[Reverb] Connection state: ${states.previous} -> ${states.current}`);
+        });
+
         // Timeout after 30 seconds
         setTimeout(() => {
-            if (!context.vars.pusher) {
-                events.emit('counter', 'pusher_connections_failed', 1);
+            if (!context.vars.reverb) {
+                console.error('[Reverb] Connection timeout after 30s');
+                events.emit('counter', 'reverb_connections_failed', 1);
                 events.emit('counter', 'websocket_errors', 1);
-                done(new Error('Pusher connection timeout'));
+                done(new Error('Reverb connection timeout'));
             }
         }, 30000);
 
     } catch (err) {
-        events.emit('counter', 'pusher_connections_failed', 1);
+        events.emit('counter', 'reverb_connections_failed', 1);
         events.emit('counter', 'websocket_errors', 1);
         events.emit('counter', 'total_errors', 1);
         connectionMetrics.totalErrors++;
@@ -144,7 +175,7 @@ function subscribeToPusherChannel(context, events, done) {
 function simulateVideoQuality720p(context, events, done) {
     try {
         // Simulate quality check
-        const qualityCheckTime = Date.now() - (context.vars.pusherConnectedAt || Date.now());
+        const qualityCheckTime = Date.now() - (context.vars.reverbConnectedAt || Date.now());
 
         // Record 720p quality stability
         events.emit('counter', 'video_quality_720p_stable', 1);
@@ -188,25 +219,25 @@ function simulateVideoQuality1080p(context, events, done) {
     }
 }
 
-// Disconnect from Pusher cleanly
-function disconnectPusher(context, events, done) {
+// Disconnect from Reverb cleanly
+function disconnectReverb(context, events, done) {
     try {
         // Calculate connection duration
-        if (context.vars.pusherConnectedAt) {
-            const connectionDuration = Date.now() - context.vars.pusherConnectedAt;
+        if (context.vars.reverbConnectedAt) {
+            const connectionDuration = Date.now() - context.vars.reverbConnectedAt;
             events.emit('histogram', 'connection_duration', connectionDuration);
         }
 
         // Unsubscribe from channel
-        if (context.vars.pusherChannel) {
-            context.vars.pusherChannel.unbind_all();
-            context.vars.pusher.unsubscribe(context.vars.pusherChannel.name);
+        if (context.vars.reverbChannel) {
+            context.vars.reverbChannel.unbind_all();
+            context.vars.reverb.unsubscribe(context.vars.reverbChannel.name);
         }
 
         // Disconnect
-        if (context.vars.pusher) {
-            context.vars.pusher.disconnect();
-            events.emit('counter', 'pusher_disconnections', 1);
+        if (context.vars.reverb) {
+            context.vars.reverb.disconnect();
+            events.emit('counter', 'reverb_disconnections', 1);
 
             // Update active connections count
             connectionMetrics.activeConnections--;
@@ -215,9 +246,9 @@ function disconnectPusher(context, events, done) {
         }
 
         // Clean up context
-        delete context.vars.pusher;
-        delete context.vars.pusherChannel;
-        delete context.vars.pusherConnectedAt;
+        delete context.vars.reverb;
+        delete context.vars.reverbChannel;
+        delete context.vars.reverbConnectedAt;
 
     } catch (err) {
         // Ignore disconnect errors but still update metrics
@@ -243,9 +274,9 @@ function calculateErrorRate(context, events, done) {
 module.exports = {
     recordRequestStart,
     recordResponseMetrics,
-    subscribeToPusherChannel,
+    subscribeToReverbChannel,
     simulateVideoQuality720p,
     simulateVideoQuality1080p,
-    disconnectPusher,
+    disconnectReverb,
     calculateErrorRate
 };

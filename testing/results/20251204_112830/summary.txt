@@ -1,0 +1,44 @@
+═══════════════════════════════════════════════════════════════
+    PERFORMANCE TEST REPORT - LIVE STREAMING PLATFORM
+═══════════════════════════════════════════════════════════════
+
+Test Date: Thu Dec  4 11:36:19 WIB 2025
+Target: https://reverb.muncak.id
+Stream: /live-cam/2
+Duration: ~6.5 minutes
+
+═══════════════════════════════════════════════════════════════
+RESEARCH PARAMETERS MEASURED
+═══════════════════════════════════════════════════════════════
+
+✓ 1. Latency (HTTP & WebSocket)
+✓ 2. Throughput (RPS)
+✓ 3. CPU Usage
+✓ 4. Memory Usage
+✓ 5. Concurrent Connections
+✓ 6. Connection Establishment Time
+✓ 7. Error Rate
+✓ 8. Video Quality Stability (720p & 1080p)
+
+═══════════════════════════════════════════════════════════════
+SYSTEM RESOURCE USAGE
+═══════════════════════════════════════════════════════════════
+
+CPU Usage:
+  Average: 925.16%
+  Peak: 1049.80%
+
+Memory Usage:
+  Average: 12257.75 MB
+  Peak: 12453.00 MB
+
+═══════════════════════════════════════════════════════════════
+AVAILABLE REPORTS
+═══════════════════════════════════════════════════════════════
+
+  /Users/mac/Herd/muncak-id-reverb/testing/results/20251204_112830/performance-report.html (13K)
+  /Users/mac/Herd/muncak-id-reverb/testing/results/20251204_112830/performance-report.pdf (763K)
+  /Users/mac/Herd/muncak-id-reverb/testing/results/20251204_112830/report.json (152K)
+  /Users/mac/Herd/muncak-id-reverb/testing/results/20251204_112830/server_metrics.csv (103B)
+  /Users/mac/Herd/muncak-id-reverb/testing/results/20251204_112830/summary.txt (2.0K)
+  /Users/mac/Herd/muncak-id-reverb/testing/results/20251204_112830/system_metrics.csv (3.4K)

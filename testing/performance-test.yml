@@ -1,5 +1,5 @@
 config:
-  target: "https://pusher.muncak.id"
+  target: "https://reverb.muncak.id"
   
   # Test phases - Progressive load testing
   phases:
@@ -45,10 +45,11 @@ config:
   
   # Environment variables
   variables:
-    pusher_key: "{{ $processEnvironment.PUSHER_APP_KEY }}"
-    pusher_cluster: "{{ $processEnvironment.PUSHER_APP_CLUSTER }}"
-    streamSlug: "quam-modi-dolor-exercitation-voluptates-quasi-culpa-ut-fugiat-aP8DAM"
-    streamId: "8"
+    reverb_host: "{{ $processEnvironment.REVERB_HOST }}"
+    reverb_port: "{{ $processEnvironment.REVERB_PORT }}"
+    reverb_scheme: "{{ $processEnvironment.REVERB_SCHEME }}"
+    reverb_key: "{{ $processEnvironment.REVERB_APP_KEY }}"
+    streamId: "2"
   
   # Plugins for enhanced metrics
   plugins:
@@ -66,7 +67,7 @@ scenarios:
     flow:
       # 1. Load stream page
       - get:
-          url: "/live-cam/{{ streamSlug }}"
+          url: "/live-cam/{{ streamId }}"
           capture:
             - json: "$.stream_id"
               as: "streamId"
@@ -77,18 +78,18 @@ scenarios:
       
       # 2. Get LiveKit token
       - get:
-          url: "/live-cam/{{ streamSlug }}/livekit/token"
+          url: "/live-cam/{{ streamId }}/livekit/token"
           expect:
             - statusCode: 200
           beforeRequest: "recordRequestStart"
           afterResponse: "recordResponseMetrics"
       
-      # 3. Subscribe to Pusher channel (WebSocket connection)
-      - function: "subscribeToPusherChannel"
+      # 3. Subscribe to Reverb channel (WebSocket connection)
+      - function: "subscribeToReverbChannel"
       
       # 4. Join viewer count
       - post:
-          url: "/live-cam/{{ streamSlug }}/viewer-count"
+          url: "/live-cam/{{ streamId }}/viewer-count"
           json:
             action: "join"
           expect:
@@ -104,7 +105,7 @@ scenarios:
       
       # 7. Send chat message
       - post:
-          url: "/live-cam/{{ streamSlug }}/chat"
+          url: "/live-cam/{{ streamId }}/chat"
           json:
             username: "Viewer-{{ $randomNumber(1000, 9999) }}"
             message: "Test message {{ $randomString() }}"
@@ -121,7 +122,7 @@ scenarios:
       
       # 10. Send another chat message
       - post:
-          url: "/live-cam/{{ streamSlug }}/chat"
+          url: "/live-cam/{{ streamId }}/chat"
           json:
             username: "Viewer-{{ $randomNumber(1000, 9999) }}"
             message: "Another message {{ $randomString() }}"
@@ -132,7 +133,7 @@ scenarios:
       
       # 11. Leave stream
       - post:
-          url: "/live-cam/{{ streamSlug }}/viewer-count"
+          url: "/live-cam/{{ streamId }}/viewer-count"
           json:
             action: "leave"
           expect:
@@ -140,8 +141,8 @@ scenarios:
           beforeRequest: "recordRequestStart"
           afterResponse: "recordResponseMetrics"
       
-      # 12. Disconnect from Pusher
-      - function: "disconnectPusher"
+      # 12. Disconnect from Reverb
+      - function: "disconnectReverb"
 
   # Scenario 2: Heavy Chat Activity (20% of traffic)
   - name: "Heavy Chat Activity"
@@ -149,18 +150,18 @@ scenarios:
     flow:
       # 1. Load stream page
       - get:
-          url: "/live-cam/{{ streamSlug }}"
+          url: "/live-cam/{{ streamId }}"
           expect:
             - statusCode: 200
           beforeRequest: "recordRequestStart"
           afterResponse: "recordResponseMetrics"
       
-      # 2. Subscribe to Pusher
-      - function: "subscribeToPusherChannel"
+      # 2. Subscribe to Reverb
+      - function: "subscribeToReverbChannel"
       
       # 3. Join viewer count
       - post:
-          url: "/live-cam/{{ streamSlug }}/viewer-count"
+          url: "/live-cam/{{ streamId }}/viewer-count"
           json:
             action: "join"
           expect:
@@ -169,7 +170,7 @@ scenarios:
       # 4. Send multiple chat messages rapidly
       - loop:
           - post:
-              url: "/live-cam/{{ streamSlug }}/chat"
+              url: "/live-cam/{{ streamId }}/chat"
               json:
                 username: "ChatUser-{{ $randomNumber(1000, 9999) }}"
                 message: "Rapid chat {{ $randomString() }}"
@@ -182,14 +183,14 @@ scenarios:
       
       # 5. Leave
       - post:
-          url: "/live-cam/{{ streamSlug }}/viewer-count"
+          url: "/live-cam/{{ streamId }}/viewer-count"
           json:
             action: "leave"
           expect:
             - statusCode: 200
       
       # 6. Disconnect
-      - function: "disconnectPusher"
+      - function: "disconnectReverb"
 
   # Scenario 3: Quick Viewer (Join and Leave - 10% of traffic)
   - name: "Quick Viewer (Bounce)"
@@ -197,18 +198,18 @@ scenarios:
     flow:
       # 1. Load stream page
       - get:
-          url: "/live-cam/{{ streamSlug }}"
+          url: "/live-cam/{{ streamId }}"
           expect:
             - statusCode: 200
           beforeRequest: "recordRequestStart"
           afterResponse: "recordResponseMetrics"
       
-      # 2. Subscribe to Pusher
-      - function: "subscribeToPusherChannel"
+      # 2. Subscribe to Reverb
+      - function: "subscribeToReverbChannel"
       
       # 3. Join viewer count
       - post:
-          url: "/live-cam/{{ streamSlug }}/viewer-count"
+          url: "/live-cam/{{ streamId }}/viewer-count"
           json:
             action: "join"
           expect:
@@ -219,14 +220,14 @@ scenarios:
       
       # 5. Leave immediately
       - post:
-          url: "/live-cam/{{ streamSlug }}/viewer-count"
+          url: "/live-cam/{{ streamId }}/viewer-count"
           json:
             action: "leave"
           expect:
             - statusCode: 200
       
       # 6. Disconnect
-      - function: "disconnectPusher"
+      - function: "disconnectReverb"
 
 # Custom metrics for research parameters
 metrics:
@@ -282,10 +283,10 @@ metrics:
   - name: "chat_messages_received"
     type: "counter"
   
-  # Pusher metrics
-  - name: "pusher_connections_success"
+  # Reverb metrics
+  - name: "reverb_connections_success"
     type: "counter"
-  - name: "pusher_connections_failed"
+  - name: "reverb_connections_failed"
     type: "counter"
-  - name: "pusher_disconnections"
+  - name: "reverb_disconnections"
     type: "counter"

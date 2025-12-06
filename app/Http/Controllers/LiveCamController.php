@@ -454,8 +454,14 @@ class LiveCamController extends Controller
         }
 
         try {
+            // Remove data URL prefix if present
+            $image = $validated['image'];
+            if (preg_match('/^data:image\/\w+;base64,/', $image)) {
+                $image = substr($image, strpos($image, ',') + 1);
+            }
+
             // Decode and save image
-            $imageData = base64_decode($validated['image']);
+            $imageData = base64_decode($image);
             $filename = "thumbnails/stream_{$id}.jpg";
 
             // Delete old thumbnail if exists

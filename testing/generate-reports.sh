@@ -313,11 +313,11 @@ cat > "${RESULT_PATH}/performance-report.html" << 'EOFHTML'
                 </div>
                 <div class="meta-item">
                     <label>Target URL</label>
-                    <value>https://pusher.muncak.id</value>
+                    <value>https://reverb.muncak.id</value>
                 </div>
                 <div class="meta-item">
-                    <label>Stream Slug</label>
-                    <value>quam-modi-dolor-exercitation-voluptates-quasi-culpa-ut-fugiat-aP8DAM</value>
+                    <label>Stream ID</label>
+                    <value>/live-cam/2</value>
                 </div>
                 <div class="meta-item">
                     <label>Test Duration</label>
@@ -487,14 +487,118 @@ cat > "${RESULT_PATH}/performance-report.html" << 'EOFHTML'
         document.getElementById('test-date').textContent = now.toLocaleDateString();
         document.getElementById('report-date').textContent = now.toLocaleString();
         
-        // Load data from files if available
-        // This will be populated by the shell script
+        // Try to load and populate data from report.json
+        fetch('./report.json')
+            .then(response => response.json())
+            .then(data => {
+                const aggregate = data.aggregate || {};
+                const counters = aggregate.counters || {};
+                const summaries = aggregate.summaries || {};
+                const rates = aggregate.rates || {};
+                
+                // Populate key metrics
+                if (summaries['http.response_time']) {
+                    document.getElementById('latency-median').textContent = 
+                        Math.round(summaries['http.response_time'].median || 0);
+                }
+                
+                if (rates.http_request_rate) {
+                    document.getElementById('throughput').textContent = rates.http_request_rate;
+                }
+                
+                // Calculate error rate
+                const totalRequests = counters['http.requests'] || 1;
+                const totalErrors = counters['total_errors'] || 0;
+                const errorRate = ((totalErrors / totalRequests) * 100).toFixed(2);
+                document.getElementById('error-rate').textContent = errorRate;
+                
+                // Populate latency table
+                if (summaries['http_request_latency']) {
+                    const httpLatency = summaries['http_request_latency'];
+                    document.getElementById('http-min').textContent = Math.round(httpLatency.min || 0) + ' ms';
+                    document.getElementById('http-median').textContent = Math.round(httpLatency.median || 0) + ' ms';
+                    document.getElementById('http-p95').textContent = Math.round(httpLatency.p95 || 0) + ' ms';
+                    document.getElementById('http-p99').textContent = Math.round(httpLatency.p99 || 0) + ' ms';
+                    document.getElementById('http-max').textContent = Math.round(httpLatency.max || 0) + ' ms';
+                }
+                
+                if (summaries['websocket_connection_latency']) {
+                    const wsLatency = summaries['websocket_connection_latency'];
+                    document.getElementById('ws-min').textContent = Math.round(wsLatency.min || 0) + ' ms';
+                    document.getElementById('ws-median').textContent = Math.round(wsLatency.median || 0) + ' ms';
+                    document.getElementById('ws-p95').textContent = Math.round(wsLatency.p95 || 0) + ' ms';
+                    document.getElementById('ws-p99').textContent = Math.round(wsLatency.p99 || 0) + ' ms';
+                    document.getElementById('ws-max').textContent = Math.round(wsLatency.max || 0) + ' ms';
+                } else {
+                    document.getElementById('ws-min').textContent = 'N/A';
+                    document.getElementById('ws-median').textContent = 'N/A';
+                    document.getElementById('ws-p95').textContent = 'N/A';
+                    document.getElementById('ws-p99').textContent = 'N/A';
+                    document.getElementById('ws-max').textContent = 'N/A';
+                }
+                
+                // Video quality metrics
+                document.getElementById('quality-720p').textContent = counters['video_quality_720p_stable'] || 0;
+                document.getElementById('quality-1080p').textContent = counters['video_quality_1080p_stable'] || 0;
+                document.getElementById('quality-changes').textContent = counters['video_quality_changes'] || 0;
+                
+                console.log('✅ Report data loaded successfully');
+            })
+            .catch(err => {
+                console.warn('⚠️ Could not load report.json:', err);
+            });
+        
+        // Try to load system metrics from CSV
+        fetch('./system_metrics.csv')
+            .then(response => response.text())
+            .then(csv => {
+                const lines = csv.trim().split('\n').slice(1); // Skip header
+                if (lines.length > 0) {
+                    let totalCpu = 0, maxCpu = 0, totalMem = 0, maxMem = 0;
+                    lines.forEach(line => {
+                        const parts = line.split(',');
+                        const cpu = parseFloat(parts[1]) || 0;
+                        const mem = parseFloat(parts[2]) || 0;
+                        totalCpu += cpu;
+                        totalMem += mem;
+                        if (cpu > maxCpu) maxCpu = cpu;
+                        if (mem > maxMem) maxMem = mem;
+                    });
+                    const avgCpu = (totalCpu / lines.length).toFixed(2);
+                    const avgMem = (totalMem / lines.length).toFixed(2);
+                    
+                    document.getElementById('cpu-avg').textContent = avgCpu;
+                    document.getElementById('sys-cpu-avg').textContent = avgCpu + '%';
+                    document.getElementById('sys-cpu-peak').textContent = maxCpu.toFixed(2) + '%';
+                    
+                    document.getElementById('memory-avg').textContent = avgMem;
+                    document.getElementById('sys-mem-avg').textContent = avgMem + ' MB';
+                    document.getElementById('sys-mem-peak').textContent = maxMem.toFixed(2) + ' MB';
+                    
+                    console.log('✅ System metrics loaded successfully');
+                }
+            })
+            .catch(err => {
+                console.warn('⚠️ Could not load system_metrics.csv:', err);
+                document.getElementById('cpu-avg').textContent = 'N/A';
+                document.getElementById('memory-avg').textContent = 'N/A';
+            });
     </script>
 </body>
 </html>
 EOFHTML
 
 echo -e "${GREEN}✓ HTML report created: performance-report.html${NC}"
+
+# Populate HTML with data from JSON
+echo ""
+echo -e "${BLUE}📊 Populating HTML with data...${NC}"
+if [ -f "${SCRIPT_DIR}/populate-html-report.js" ] && [ -f "${RESULT_PATH}/report.json" ]; then
+    node "${SCRIPT_DIR}/populate-html-report.js" "${RESULT_PATH}"
+else
+    echo -e "${YELLOW}⚠ Data population skipped (missing script or report.json)${NC}"
+fi
+
 
 # Generate PDF Report using Node.js puppeteer
 echo ""
@@ -540,8 +644,8 @@ cat > "${RESULT_PATH}/summary.txt" << EOFTXT
 ═══════════════════════════════════════════════════════════════
 
 Test Date: $(date)
-Target: https://pusher.muncak.id
-Stream: quam-modi-dolor-exercitation-voluptates-quasi-culpa-ut-fugiat-aP8DAM
+Target: https://reverb.muncak.id
+Stream: /live-cam/2
 Duration: ~6.5 minutes
 
 ═══════════════════════════════════════════════════════════════

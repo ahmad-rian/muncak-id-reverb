@@ -5,7 +5,7 @@
     "main": "test-processor.cjs",
     "scripts": {
         "test": "./run-performance-test.sh",
-        "test:quick": "artillery quick --count 10 --num 50 https://pusher.muncak.id",
+        "test:quick": "artillery quick --count 10 --num 50 https://reverb.muncak.id",
         "install-artillery": "npm install -g artillery"
     },
     "keywords": [
