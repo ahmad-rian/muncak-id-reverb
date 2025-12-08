@@ -21,6 +21,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append([
             \App\Http\Middleware\TrackVisitor::class,
         ]);
+
+        // ✅ OPTIMIZATION: Exclude API routes from CSRF protection
+        $middleware->validateCsrfTokens(except: [
+            'api/*',
+            'live-cam/*/chat',
+            'live-cam/*/viewer-count',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

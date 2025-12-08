@@ -40,15 +40,37 @@ function subscribeToReverbChannel(context, events, done) {
     const startTime = Date.now();
 
     try {
+        // Get configuration from environment variables
+        const reverbKey = context.vars.reverb_key || 't04ejpaztc3hvzutpy42';
+        const reverbHost = context.vars.reverb_host || 'reverb.muncak.id';
+        const reverbPort = parseInt(context.vars.reverb_port || '9000');
+        const reverbScheme = context.vars.reverb_scheme || 'http';
+        const useTLS = reverbScheme === 'https';
+
+        console.log(`[Reverb] Connecting to ${reverbScheme}://${reverbHost}:${reverbPort}`);
+        console.log(`[Reverb] App Key: ${reverbKey}`);
+        console.log(`[Reverb] Use TLS: ${useTLS}`);
+
         // Initialize Pusher client for Reverb (Reverb uses Pusher protocol)
-        const pusher = new Pusher(context.vars.reverb_key || 't04ejpaztc3hvzutpy42', {
-            wsHost: context.vars.reverb_host || 'reverb.muncak.id',
-            wsPort: context.vars.reverb_port || 6001,
-            wssPort: context.vars.reverb_port || 6001,
-            forceTLS: (context.vars.reverb_scheme || 'https') === 'https',
+        // Note: cluster is required by pusher-js 8.x but gets overridden by wsHost
+        const pusherConfig = {
+            cluster: 'mt1',  // Dummy cluster, overridden by wsHost
+            wsHost: reverbHost,
+            forceTLS: useTLS,
             enabledTransports: ['ws', 'wss'],
             disableStats: true
-        });
+        };
+
+        // Set port based on TLS setting
+        if (useTLS) {
+            pusherConfig.wssPort = reverbPort;
+        } else {
+            pusherConfig.wsPort = reverbPort;
+        }
+
+        console.log('[Reverb] Pusher config:', JSON.stringify(pusherConfig, null, 2));
+
+        const pusher = new Pusher(reverbKey, pusherConfig);
 
         const streamId = context.vars.streamId || '2';
         const channelName = `stream.${streamId}`;
@@ -63,6 +85,8 @@ function subscribeToReverbChannel(context, events, done) {
         channel.bind('pusher:subscription_succeeded', () => {
             const connectionTime = Date.now() - startTime;
 
+            console.log(`[Reverb] ✓ Successfully subscribed to ${channelName} in ${connectionTime}ms`);
+
             // Track connection establishment time
             events.emit('histogram', 'connection_establishment_time', connectionTime);
             events.emit('histogram', 'websocket_connection_latency', connectionTime);
@@ -72,6 +96,8 @@ function subscribeToReverbChannel(context, events, done) {
             connectionMetrics.activeConnections++;
             events.emit('gauge', 'concurrent_connections', connectionMetrics.activeConnections);
             events.emit('gauge', 'active_websocket_connections', connectionMetrics.activeConnections);
+
+            console.log(`[Reverb] Active connections: ${connectionMetrics.activeConnections}`);
 
             // Store connection info
             context.vars.reverbChannel = channel;
@@ -84,12 +110,14 @@ function subscribeToReverbChannel(context, events, done) {
                 events.emit('histogram', 'chat_message_latency', messageLatency);
                 events.emit('counter', 'chat_messages_received', 1);
                 events.emit('counter', 'messages_per_second', 1);
+                console.log(`[Reverb] Chat message received, latency: ${messageLatency}ms`);
             });
 
             // Listen for viewer count updates
             channel.bind('ViewerCountUpdated', (data) => {
                 events.emit('counter', 'viewer_count_updates', 1);
                 events.emit('gauge', 'current_viewer_count', data.count || 0);
+                console.log(`[Reverb] Viewer count updated: ${data.count}`);
             });
 
             // Listen for quality changes
@@ -105,6 +133,7 @@ function subscribeToReverbChannel(context, events, done) {
                 } else if (data.quality === '1080p') {
                     events.emit('counter', 'video_quality_1080p_stable', 1);
                 }
+                console.log(`[Reverb] Quality changed to: ${data.quality}`);
             });
 
             // Listen for chunk events (video streaming)

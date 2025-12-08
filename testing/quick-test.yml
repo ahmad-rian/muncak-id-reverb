@@ -1,0 +1,75 @@
+config:
+  target: "https://reverb.muncak.id"
+  
+  # Quick test phases
+  phases:
+    # Phase 1: Quick test (30 seconds)
+    - duration: 30
+      arrivalRate: 2
+      name: "Quick Test (2 users/sec)"
+
+  processor: "./test-processor.cjs"
+  
+  # HTTP configuration
+  http:
+    timeout: 45
+    maxSockets: 100
+  
+  # Environment variables
+  variables:
+    reverb_host: "{{ $processEnvironment.REVERB_HOST }}"
+    reverb_port: "{{ $processEnvironment.REVERB_PORT }}"
+    reverb_scheme: "{{ $processEnvironment.REVERB_SCHEME }}"
+    reverb_key: "{{ $processEnvironment.REVERB_APP_KEY }}"
+    streamId: "2"
+  
+  # Plugins for enhanced metrics
+  plugins:
+    expect: {}
+    metrics-by-endpoint: {}
+  
+  # Ensure test completes even with errors
+  ensure:
+    maxErrorRate: 10  # Allow up to 10% error rate
+
+scenarios:
+  # Scenario: Simple viewer test
+  - name: "Simple Viewer Test"
+    weight: 100
+    flow:
+      # 1. Load stream page
+      - get:
+          url: "/live-cam/{{ streamId }}"
+          expect:
+            - statusCode: 200
+          beforeRequest: "recordRequestStart"
+          afterResponse: "recordResponseMetrics"
+      
+      # 2. Subscribe to Reverb channel (WebSocket connection)
+      - function: "subscribeToReverbChannel"
+      
+      # 3. Join viewer count
+      - post:
+          url: "/live-cam/{{ streamId }}/viewer-count"
+          json:
+            action: "join"
+          expect:
+            - statusCode: 200
+          beforeRequest: "recordRequestStart"
+          afterResponse: "recordResponseMetrics"
+      
+      # 4. Watch for 5 seconds
+      - think: 5
+      
+      # 5. Leave stream
+      - post:
+          url: "/live-cam/{{ streamId }}/viewer-count"
+          json:
+            action: "leave"
+          expect:
+            - statusCode: 200
+          beforeRequest: "recordRequestStart"
+          afterResponse: "recordResponseMetrics"
+      
+      # 6. Disconnect from Reverb
+      - function: "disconnectReverb"

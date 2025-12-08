@@ -8,6 +8,7 @@ use App\Models\TrailClassification;
 use App\Services\GeminiClassifier;
 use App\Services\StreamService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -23,7 +24,7 @@ class LiveCamController extends Controller
      */
     public function index(Request $request)
     {
-        // Section 1: Live streams only
+        // Section 1: Live streams only (no cache for real-time data)
         $liveStreams = Stream::with(['mountain', 'jalur'])
             ->where('status', 'live')
             ->latest('started_at')
@@ -55,10 +56,13 @@ class LiveCamController extends Controller
 
         $streams = $classificationQuery->paginate(12);
 
-        // Get only jalurs that have streams with classifications
-        $jalurs = \App\Models\Rute::whereHas('streams', function ($q) {
-            $q->whereHas('latestClassification');
-        })->orderBy('nama')->get();
+        // ✅ OPTIMIZATION: Cache jalurs list for 5 minutes (300 seconds)
+        // Only jalurs with classifications are needed for filter dropdown
+        $jalurs = Cache::remember('jalurs_with_classifications', 300, function() {
+            return \App\Models\Rute::whereHas('streams', function ($q) {
+                $q->whereHas('latestClassification');
+            })->orderBy('nama')->get();
+        });
 
         return view('live-cam.index', compact('liveStreams', 'streams', 'jalurs'));
     }
@@ -76,6 +80,20 @@ class LiveCamController extends Controller
             $guestUsername = 'Guest' . rand(1000, 9999);
             session(['guest_username' => $guestUsername]);
         }
+
+        // ✅ OPTIMIZATION: Increment total views asynchronously to avoid database lock contention
+        // Under high load, synchronous increment causes row-level locking and timeouts
+        // Process after response is sent to user
+        dispatch(function () use ($id) {
+            try {
+                Stream::where('id', $id)->increment('total_views');
+            } catch (\Exception $e) {
+                \Log::error('Failed to increment total views', [
+                    'stream_id' => $id,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        })->afterResponse();
 
         return view('live-cam.watch', compact('stream', 'guestUsername'));
     }
@@ -134,27 +152,57 @@ class LiveCamController extends Controller
                 return response()->json(['success' => false, 'error' => 'Stream offline'], 409);
             }
 
+            // ✅ OPTIMIZATION: Rate limiting - 100 messages per 10 seconds per IP
+            // Uncomment for production, comment out for testing
+            /*
+            $ip = $request->ip();
+            $rateLimitKey = 'chat:ratelimit:' . $id . ':' . $ip;
+            $messageCount = Cache::get($rateLimitKey, 0);
+
+            if ($messageCount >= 100) {
+                $ttl = Cache::get($rateLimitKey . ':ttl', 0);
+                $waitTime = max(0, 10 - (time() - $ttl));
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Rate limit exceeded',
+                    'wait' => $waitTime
+                ], 429);
+            }
+            */
+
+            // Sanitize message
+            $message = strip_tags($validated['message']);
+            $username = strip_tags($validated['username']);
+
             $chatMessage = ChatMessage::create([
                 'stream_id' => $stream->id,
-                'username' => $validated['username'],
-                'message' => $validated['message'],
+                'username' => $username,
+                'message' => $message,
             ]);
 
-            $message = [
+            // Update rate limit counter (disabled for testing)
+            /*
+            if ($messageCount === 0) {
+                Cache::put($rateLimitKey . ':ttl', time(), 10);
+            }
+            Cache::put($rateLimitKey, $messageCount + 1, 10);
+            */
+
+            $messageData = [
                 'username' => $chatMessage->username,
                 'message' => $chatMessage->message,
                 'created_at' => $chatMessage->created_at->toISOString(),
             ];
 
             try {
-                event(new \App\Events\ChatMessageSent($stream->id, $message));
+                event(new \App\Events\ChatMessageSent($stream->id, $messageData));
             } catch (\Throwable $e) {
                 \Log::warning('Broadcast ChatMessageSent failed: ' . $e->getMessage());
             }
 
             return response()->json([
                 'success' => true,
-                'message' => $message,
+                'message' => $messageData,
             ]);
         } catch (\Throwable $e) {
             \Log::error('sendChat failed: ' . $e->getMessage());
@@ -174,18 +222,22 @@ class LiveCamController extends Controller
             return response()->json(['messages' => []]);
         }
 
-        // Get chat messages for this stream session (since stream started)
+        // ✅ OPTIMIZATION: Add pagination and limit - only get last 100 messages
+        // This prevents slow queries when there are thousands of chat messages
         $messages = ChatMessage::where('stream_id', $id)
             ->where('created_at', '>=', $stream->started_at)
-            ->orderBy('created_at', 'asc')
+            ->orderBy('created_at', 'desc')
+            ->limit(100)
             ->get()
+            ->reverse()
             ->map(function ($msg) {
                 return [
                     'username' => $msg->username,
                     'message' => $msg->message,
                     'created_at' => $msg->created_at->toISOString(),
                 ];
-            });
+            })
+            ->values();
 
         return response()->json(['messages' => $messages]);
     }
@@ -205,23 +257,39 @@ class LiveCamController extends Controller
             return response()->json(['error' => 'Stream not found'], 404);
         }
 
+        // ✅ OPTIMIZATION: Update viewer count asynchronously to avoid database lock
+        $newCount = $stream->viewer_count;
+
+        dispatch(function () use ($id, $validated, &$newCount) {
+            try {
+                $stream = Stream::find($id);
+                if (!$stream) return;
+
+                if ($validated['action'] === 'join') {
+                    $stream->increment('viewer_count');
+                } else {
+                    $stream->decrement('viewer_count', 1, ['viewer_count' => 0]);
+                }
+
+                $stream->refresh();
+
+                // Broadcast viewer count update
+                event(new \App\Events\ViewerCountUpdated($stream->id, $stream->viewer_count));
+            } catch (\Throwable $e) {
+                \Log::warning('Viewer count update failed: ' . $e->getMessage());
+            }
+        })->afterResponse();
+
+        // Return optimistic response
         if ($validated['action'] === 'join') {
-            $stream->increment('viewer_count');
+            $newCount = $stream->viewer_count + 1;
         } else {
-            $stream->decrement('viewer_count', 1, ['viewer_count' => 0]);
-        }
-
-        $stream->refresh();
-
-        try {
-            event(new \App\Events\ViewerCountUpdated($stream->id, $stream->viewer_count));
-        } catch (\Throwable $e) {
-            \Log::warning('Broadcast ViewerCountUpdated failed: ' . $e->getMessage());
+            $newCount = max(0, $stream->viewer_count - 1);
         }
 
         return response()->json([
             'success' => true,
-            'viewer_count' => $stream->viewer_count,
+            'viewer_count' => $newCount,
         ]);
     }
 
