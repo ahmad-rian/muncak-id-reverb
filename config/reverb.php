@@ -28,8 +28,9 @@ return [
                 ],
             ],
             'scaling' => [
-                'enabled' => env('REVERB_SCALING_ENABLED', false),
+                'enabled' => env('REVERB_SCALING_ENABLED', true), // ✅ Enable by default
                 'channel' => env('REVERB_SCALING_CHANNEL', 'reverb'),
+                'server_id' => env('REVERB_SERVER_ID', null), // For multi-server setup
             ],
             'pulse_ingest_interval' => env('REVERB_PULSE_INGEST_INTERVAL', 15),
             'telescope_ingest_interval' => env('REVERB_TELESCOPE_INGEST_INTERVAL', 15),
