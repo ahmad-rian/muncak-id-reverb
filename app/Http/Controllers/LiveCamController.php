@@ -16,8 +16,7 @@ class LiveCamController extends Controller
 {
     public function __construct(
         protected StreamService $streamService
-    ) {
-    }
+    ) {}
 
     /**
      * Display list of live streams (public viewer page)
@@ -58,7 +57,7 @@ class LiveCamController extends Controller
 
         // ✅ OPTIMIZATION: Cache jalurs list for 5 minutes (300 seconds)
         // Only jalurs with classifications are needed for filter dropdown
-        $jalurs = Cache::remember('jalurs_with_classifications', 300, function() {
+        $jalurs = Cache::remember('jalurs_with_classifications', 300, function () {
             return \App\Models\Rute::whereHas('streams', function ($q) {
                 $q->whereHas('latestClassification');
             })->orderBy('nama')->get();
@@ -152,23 +151,20 @@ class LiveCamController extends Controller
                 return response()->json(['success' => false, 'error' => 'Stream offline'], 409);
             }
 
-            // ✅ OPTIMIZATION: Rate limiting - 100 messages per 10 seconds per IP
-            // Uncomment for production, comment out for testing
-            /*
+            // ✅ OPTIMIZATION: Rate limiting - 5 messages per 10 seconds per IP
             $ip = $request->ip();
             $rateLimitKey = 'chat:ratelimit:' . $id . ':' . $ip;
             $messageCount = Cache::get($rateLimitKey, 0);
 
-            if ($messageCount >= 100) {
+            if ($messageCount >= 5) {
                 $ttl = Cache::get($rateLimitKey . ':ttl', 0);
                 $waitTime = max(0, 10 - (time() - $ttl));
                 return response()->json([
                     'success' => false,
-                    'error' => 'Rate limit exceeded',
+                    'error' => 'Too many messages. Please wait.',
                     'wait' => $waitTime
                 ], 429);
             }
-            */
 
             // Sanitize message
             $message = strip_tags($validated['message']);
@@ -180,13 +176,11 @@ class LiveCamController extends Controller
                 'message' => $message,
             ]);
 
-            // Update rate limit counter (disabled for testing)
-            /*
+            // Update rate limit counter
             if ($messageCount === 0) {
                 Cache::put($rateLimitKey . ':ttl', time(), 10);
             }
             Cache::put($rateLimitKey, $messageCount + 1, 10);
-            */
 
             $messageData = [
                 'username' => $chatMessage->username,
@@ -244,6 +238,7 @@ class LiveCamController extends Controller
 
     /**
      * Update viewer count (public API)
+     * ✅ OPTIMIZATION: Use Redis atomic operations to prevent race conditions
      */
     public function updateViewerCount(Request $request, int $id)
     {
@@ -257,40 +252,61 @@ class LiveCamController extends Controller
             return response()->json(['error' => 'Stream not found'], 404);
         }
 
-        // ✅ OPTIMIZATION: Update viewer count asynchronously to avoid database lock
-        $newCount = $stream->viewer_count;
+        // ✅ FIX: Use Redis atomic increment/decrement to prevent race conditions
+        // Redis operations are atomic and much faster than database row locking
+        $redisKey = "stream:{$id}:viewer_count";
+        $newCount = 0;
 
-        dispatch(function () use ($id, $validated, &$newCount) {
-            try {
-                $stream = Stream::find($id);
-                if (!$stream) return;
+        try {
+            if ($validated['action'] === 'join') {
+                $newCount = Cache::increment($redisKey);
 
-                if ($validated['action'] === 'join') {
-                    $stream->increment('viewer_count');
-                } else {
-                    $stream->decrement('viewer_count', 1, ['viewer_count' => 0]);
+                // Initialize Redis counter if first viewer
+                if ($newCount === 1) {
+                    Cache::put($redisKey, max(1, $stream->viewer_count + 1), 3600);
+                    $newCount = Cache::get($redisKey);
                 }
+            } else {
+                $newCount = Cache::decrement($redisKey);
 
-                $stream->refresh();
-
-                // Broadcast viewer count update
-                event(new \App\Events\ViewerCountUpdated($stream->id, $stream->viewer_count));
-            } catch (\Throwable $e) {
-                \Log::warning('Viewer count update failed: ' . $e->getMessage());
+                // Prevent negative counts
+                if ($newCount < 0) {
+                    Cache::put($redisKey, 0, 3600);
+                    $newCount = 0;
+                }
             }
-        })->afterResponse();
 
-        // Return optimistic response
-        if ($validated['action'] === 'join') {
-            $newCount = $stream->viewer_count + 1;
-        } else {
-            $newCount = max(0, $stream->viewer_count - 1);
+            // Sync to database asynchronously (non-blocking, low priority)
+            dispatch(function () use ($id, $newCount) {
+                try {
+                    Stream::where('id', $id)->update(['viewer_count' => $newCount]);
+                } catch (\Throwable $e) {
+                    \Log::warning('Viewer count DB sync failed: ' . $e->getMessage());
+                }
+            })->afterResponse();
+
+            // Broadcast viewer count update immediately from Redis value
+            event(new \App\Events\ViewerCountUpdated($stream->id, $newCount));
+
+            return response()->json([
+                'success' => true,
+                'viewer_count' => $newCount,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Viewer count update failed: ' . $e->getMessage());
+
+            // Fallback to optimistic response
+            if ($validated['action'] === 'join') {
+                $newCount = $stream->viewer_count + 1;
+            } else {
+                $newCount = max(0, $stream->viewer_count - 1);
+            }
+
+            return response()->json([
+                'success' => true,
+                'viewer_count' => $newCount,
+            ]);
         }
-
-        return response()->json([
-            'success' => true,
-            'viewer_count' => $newCount,
-        ]);
     }
 
     /**
@@ -546,7 +562,6 @@ class LiveCamController extends Controller
                 'success' => true,
                 'thumbnail_url' => Storage::disk('public')->url($filename),
             ]);
-
         } catch (\Exception $e) {
             \Log::error('Thumbnail save error: ' . $e->getMessage());
             return response()->json([
@@ -617,7 +632,6 @@ class LiveCamController extends Controller
                     'classified_at' => $classification->classified_at_wib,
                 ],
             ]);
-
         } catch (\Exception $e) {
             \Log::error('Classification error: ' . $e->getMessage());
 
@@ -696,7 +710,6 @@ class LiveCamController extends Controller
                 'url' => $livekitUrl,
                 'room' => $roomName,
             ]);
-
         } catch (\Exception $e) {
             \Log::error('LiveKit token generation failed: ' . $e->getMessage());
             \Log::error($e->getTraceAsString());
@@ -752,7 +765,6 @@ class LiveCamController extends Controller
                 'url' => $livekitUrl,
                 'room' => $roomName,
             ]);
-
         } catch (\Exception $e) {
             \Log::error('LiveKit viewer token generation failed: ' . $e->getMessage());
             return response()->json([

@@ -21,6 +21,10 @@ let localTracks = [];
 let isMirrored = false;
 let startTime = null;
 let durationInterval = null;
+let reverbReady = false; // Track Reverb connection status
+let channelSubscription = null; // Store channel reference
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 console.log('🎥 LiveKit Broadcaster starting...');
 console.log('Stream ID:', streamId);
@@ -34,8 +38,82 @@ if (!echo) {
     throw new Error('Laravel Echo is required');
 }
 
-const channel = echo.channel(`stream.${streamId}`);
-console.log('📡 Broadcaster subscribed to Reverb channel:', `stream.${streamId}`);
+// ✅ FIX: Wait for Reverb connection before subscribing to channel
+function subscribeToChannel() {
+    if (channelSubscription) {
+        console.log('📡 Already subscribed to channel');
+        return;
+    }
+
+    console.log('📡 Subscribing to Reverb channel:', `stream.${streamId}`);
+    channelSubscription = echo.channel(`stream.${streamId}`);
+    
+    // Setup channel event listeners
+    setupChannelListeners();
+}
+
+// Reverb connection status with retry logic
+echo.connector.pusher.connection.bind('connected', () => {
+    console.log('✅ Connected to Reverb');
+    reverbReady = true;
+    reconnectAttempts = 0;
+    
+    // Subscribe to channel after connection is ready
+    subscribeToChannel();
+});
+
+echo.connector.pusher.connection.bind('unavailable', () => {
+    console.warn('⚠️ Reverb connection unavailable');
+    reverbReady = false;
+});
+
+echo.connector.pusher.connection.bind('failed', () => {
+    console.error('❌ Reverb connection failed');
+    reverbReady = false;
+    
+    // Attempt reconnection with exponential backoff
+    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        console.log(`🔄 Reconnecting to Reverb in ${backoffDelay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        
+        setTimeout(() => {
+            console.log('🔄 Attempting Reverb reconnection...');
+            echo.connector.pusher.connect();
+        }, backoffDelay);
+    } else {
+        console.error('❌ Max reconnection attempts reached. Please refresh the page.');
+        // Show user-friendly error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-error fixed top-4 right-4 w-96 z-50';
+        errorDiv.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+                <h3 class="font-bold">Connection Lost</h3>
+                <div class="text-xs">Chat and viewer count may be unavailable. Please refresh.</div>
+            </div>
+        `;
+        document.body.appendChild(errorDiv);
+        
+        setTimeout(() => errorDiv.remove(), 10000);
+    }
+});
+
+echo.connector.pusher.connection.bind('error', (err) => {
+    console.error('❌ Reverb connection error:', err);
+    reverbReady = false;
+});
+
+// Setup channel event listeners (called after subscription)
+function setupChannelListeners() {
+    if (!channelSubscription) {
+        console.warn('⚠️ Cannot setup listeners: channel not subscribed');
+        return;
+    }
+
+const channel = channelSubscription;
 
 // DOM elements
 const video = document.getElementById('camera-preview');
@@ -595,6 +673,7 @@ initializeCamera();
 
 // Load chat history
 loadChatHistory();
+}
 
 // Reverb connection status
 echo.connector.pusher.connection.bind('connected', () => {
