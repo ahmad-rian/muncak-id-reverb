@@ -1,82 +1,4 @@
-#!/usr/bin/env node
-
-/**
- * Populate HTML Report with Artillery Test Data
- * This script reads report.json and CSV files, then generates a complete HTML report
- */
-
-const fs = require('fs');
-const path = require('path');
-
-// Get result directory from command line or use latest
-const resultDir = process.argv[2];
-
-if (!resultDir || !fs.existsSync(resultDir)) {
-    console.error('❌ Error: Result directory not found');
-    console.error('Usage: node populate-html-report.js <result-directory>');
-    process.exit(1);
-}
-
-console.log('📊 Populating HTML report with test data...');
-console.log(`📁 Result directory: ${resultDir}`);
-
-// Read report.json
-const reportJsonPath = path.join(resultDir, 'report.json');
-if (!fs.existsSync(reportJsonPath)) {
-    console.error('❌ Error: report.json not found');
-    process.exit(1);
-}
-
-const reportData = JSON.parse(fs.readFileSync(reportJsonPath, 'utf8'));
-const aggregate = reportData.aggregate || {};
-const counters = aggregate.counters || {};
-const summaries = aggregate.summaries || {};
-
-// Read system metrics CSV
-const systemMetricsPath = path.join(resultDir, 'system_metrics.csv');
-let systemMetrics = { avgCpu: 0, peakCpu: 0, avgMemory: 0, peakMemory: 0 };
-
-if (fs.existsSync(systemMetricsPath)) {
-    const csvData = fs.readFileSync(systemMetricsPath, 'utf8');
-    const lines = csvData.split('\n').filter(line => line.trim() && !line.startsWith('timestamp'));
-
-    let cpuSum = 0, memSum = 0, maxCpu = 0, maxMem = 0;
-    lines.forEach(line => {
-        const [, cpu, mem] = line.split(',').map(v => parseFloat(v));
-        if (!isNaN(cpu) && !isNaN(mem)) {
-            cpuSum += cpu;
-            memSum += mem;
-            if (cpu > maxCpu) maxCpu = cpu;
-            if (mem > maxMem) maxMem = mem;
-        }
-    });
-
-    systemMetrics = {
-        avgCpu: (cpuSum / lines.length).toFixed(2),
-        peakCpu: maxCpu.toFixed(2),
-        avgMemory: (memSum / lines.length).toFixed(2),
-        peakMemory: maxMem.toFixed(2)
-    };
-}
-
-// Calculate metrics
-const totalRequests = counters['http.requests'] || 0;
-const successfulRequests = counters['http.codes.200'] || 0;
-const totalErrors = counters['total_errors'] || counters['http_errors'] || 0;
-const errorRate = totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(2) : 0;
-
-const httpLatency = summaries['http.response_time'] || {};
-const wsLatency = summaries['websocket_connection_latency'] || summaries['connection_establishment_time'] || {};
-
-const throughput = aggregate.rates?.['http.request_rate'] || 0;
-const reverbConnectionsSuccess = counters['reverb_connections_success'] || 0;
-const reverbConnectionsFailed = counters['reverb_connections_failed'] || 0;
-const reverbDisconnections = counters['reverb_disconnections'] || 0;
-const totalReverbConnections = reverbConnectionsSuccess + reverbConnectionsFailed;
-const concurrentConnections = reverbConnectionsSuccess;
-
-// Generate HTML with embedded data
-const htmlTemplate = `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -305,7 +227,7 @@ const htmlTemplate = `<!DOCTYPE html>
             <div class="meta-grid">
                 <div class="meta-item">
                     <label>Test Date</label>
-                    <div class="value">${new Date(aggregate.firstMetricAt || Date.now()).toLocaleString()}</div>
+                    <div class="value">12/6/2025, 11:31:07 AM</div>
                 </div>
                 <div class="meta-item">
                     <label>Target URL</label>
@@ -313,11 +235,11 @@ const htmlTemplate = `<!DOCTYPE html>
                 </div>
                 <div class="meta-item">
                     <label>Total Requests</label>
-                    <div class="value">${totalRequests.toLocaleString()}</div>
+                    <div class="value">19,584</div>
                 </div>
                 <div class="meta-item">
                     <label>Test Duration</label>
-                    <div class="value">${((aggregate.lastMetricAt - aggregate.firstMetricAt) / 1000 / 60).toFixed(1)} minutes</div>
+                    <div class="value">8.4 minutes</div>
                 </div>
             </div>
         </div>
@@ -327,38 +249,38 @@ const htmlTemplate = `<!DOCTYPE html>
             <div class="metrics-grid">
                 <div class="metric-card success">
                     <h3>⚡ Latency (Median)</h3>
-                    <div class="value">${httpLatency.median || httpLatency.p50 || 0}</div>
+                    <div class="value">10201.2</div>
                     <div class="label">milliseconds</div>
                 </div>
                 
                 <div class="metric-card info">
                     <h3>📈 Throughput</h3>
-                    <div class="value">${throughput}</div>
+                    <div class="value">22</div>
                     <div class="label">requests/sec</div>
                 </div>
                 
                 <div class="metric-card">
                     <h3>💻 CPU Usage (Avg)</h3>
-                    <div class="value">${systemMetrics.avgCpu}%</div>
+                    <div class="value">192.64%</div>
                     <div class="label">average</div>
                 </div>
                 
                 <div class="metric-card">
                     <h3>🧠 Memory Usage (Avg)</h3>
-                    <div class="value">${systemMetrics.avgMemory}</div>
+                    <div class="value">9818.90</div>
                     <div class="label">MB</div>
                 </div>
                 
                 <div class="metric-card info">
                     <h3>🔌 Concurrent Connections</h3>
-                    <div class="value">${concurrentConnections}</div>
+                    <div class="value">1575</div>
                     <div class="label">connections</div>
                 </div>
                 
-                <div class="metric-card ${errorRate > 10 ? 'warning' : 'success'}">
+                <div class="metric-card warning">
                     <h3>❌ Error Rate</h3>
-                    <div class="value">${errorRate}%</div>
-                    <div class="label">${totalErrors} errors</div>
+                    <div class="value">38.13%</div>
+                    <div class="label">7468 errors</div>
                 </div>
             </div>
         </div>
@@ -382,19 +304,19 @@ const htmlTemplate = `<!DOCTYPE html>
                     <tbody>
                         <tr>
                             <td>HTTP Request Latency</td>
-                            <td>${httpLatency.min || 0} ms</td>
-                            <td>${httpLatency.median || httpLatency.p50 || 0} ms</td>
-                            <td>${httpLatency.p95 || 0} ms</td>
-                            <td>${httpLatency.p99 || 0} ms</td>
-                            <td>${httpLatency.max || 0} ms</td>
+                            <td>2 ms</td>
+                            <td>10201.2 ms</td>
+                            <td>31266.3 ms</td>
+                            <td>35252.8 ms</td>
+                            <td>44772 ms</td>
                         </tr>
                         <tr>
                             <td>WebSocket Connection</td>
-                            <td>${wsLatency.min || 'N/A'}</td>
-                            <td>${wsLatency.median || wsLatency.p50 || 'N/A'}</td>
-                            <td>${wsLatency.p95 || 'N/A'}</td>
-                            <td>${wsLatency.p99 || 'N/A'}</td>
-                            <td>${wsLatency.max || 'N/A'}</td>
+                            <td>2086</td>
+                            <td>2143.5</td>
+                            <td>140132.7</td>
+                            <td>213279.5</td>
+                            <td>283324</td>
                         </tr>
                     </tbody>
                 </table>
@@ -414,14 +336,14 @@ const htmlTemplate = `<!DOCTYPE html>
                     <tbody>
                         <tr>
                             <td>CPU Usage</td>
-                            <td>${systemMetrics.avgCpu}%</td>
-                            <td>${systemMetrics.peakCpu}%</td>
-                            <td><span class="status-badge ${systemMetrics.peakCpu > 80 ? 'warning' : 'success'}">${systemMetrics.peakCpu > 80 ? 'High' : 'Normal'}</span></td>
+                            <td>192.64%</td>
+                            <td>480.40%</td>
+                            <td><span class="status-badge warning">High</span></td>
                         </tr>
                         <tr>
                             <td>Memory Usage</td>
-                            <td>${systemMetrics.avgMemory} MB</td>
-                            <td>${systemMetrics.peakMemory} MB</td>
+                            <td>9818.90 MB</td>
+                            <td>10559.00 MB</td>
                             <td><span class="status-badge success">Normal</span></td>
                         </tr>
                     </tbody>
@@ -442,25 +364,25 @@ const htmlTemplate = `<!DOCTYPE html>
                     <tbody>
                         <tr>
                             <td>Total Connection Attempts</td>
-                            <td>${totalReverbConnections.toLocaleString()}</td>
+                            <td>2,420</td>
                             <td>100%</td>
                             <td>-</td>
                         </tr>
                         <tr>
                             <td>Successful Connections</td>
-                            <td>${reverbConnectionsSuccess.toLocaleString()}</td>
-                            <td>${totalReverbConnections > 0 ? ((reverbConnectionsSuccess / totalReverbConnections) * 100).toFixed(2) : 0}%</td>
+                            <td>1,575</td>
+                            <td>65.08%</td>
                             <td><span class="status-badge success">Success</span></td>
                         </tr>
                         <tr>
                             <td>Failed Connections</td>
-                            <td>${reverbConnectionsFailed.toLocaleString()}</td>
-                            <td>${totalReverbConnections > 0 ? ((reverbConnectionsFailed / totalReverbConnections) * 100).toFixed(2) : 0}%</td>
-                            <td><span class="status-badge ${reverbConnectionsFailed > 0 ? 'warning' : 'success'}">${reverbConnectionsFailed > 0 ? 'Warning' : 'OK'}</span></td>
+                            <td>845</td>
+                            <td>34.92%</td>
+                            <td><span class="status-badge warning">Warning</span></td>
                         </tr>
                         <tr>
                             <td>Clean Disconnections</td>
-                            <td>${reverbDisconnections.toLocaleString()}</td>
+                            <td>572</td>
                             <td>-</td>
                             <td><span class="status-badge success">OK</span></td>
                         </tr>
@@ -481,27 +403,27 @@ const htmlTemplate = `<!DOCTYPE html>
                     <tbody>
                         <tr>
                             <td>Total Requests</td>
-                            <td>${totalRequests.toLocaleString()}</td>
+                            <td>19,584</td>
                             <td>100%</td>
                         </tr>
                         <tr>
                             <td>Successful (200)</td>
-                            <td>${successfulRequests.toLocaleString()}</td>
-                            <td>${((successfulRequests / totalRequests) * 100).toFixed(2)}%</td>
+                            <td>5,144</td>
+                            <td>26.27%</td>
                         </tr>
                         <tr>
                             <td>Errors</td>
-                            <td>${totalErrors.toLocaleString()}</td>
-                            <td>${errorRate}%</td>
+                            <td>7,468</td>
+                            <td>38.13%</td>
                         </tr>
                         <tr>
                             <td>Virtual Users Created</td>
-                            <td>${(counters['vusers.created'] || 0).toLocaleString()}</td>
+                            <td>11,235</td>
                             <td>-</td>
                         </tr>
                         <tr>
                             <td>Virtual Users Completed</td>
-                            <td>${(counters['vusers.completed'] || 0).toLocaleString()}</td>
+                            <td>572</td>
                             <td>-</td>
                         </tr>
                     </tbody>
@@ -525,25 +447,9 @@ const htmlTemplate = `<!DOCTYPE html>
         </div>
         
         <div class="footer">
-            <p>Generated on ${new Date().toLocaleString()}</p>
+            <p>Generated on 12/6/2025, 11:39:37 AM</p>
             <p>Artillery Performance Testing Suite v1.0</p>
         </div>
     </div>
 </body>
-</html>`;
-
-// Write the populated HTML
-const outputPath = path.join(resultDir, 'performance-report.html');
-fs.writeFileSync(outputPath, htmlTemplate);
-
-console.log('✅ HTML report populated successfully!');
-console.log(`📄 Output: ${outputPath}`);
-console.log('');
-console.log('📊 Summary:');
-console.log(`  Total Requests: ${totalRequests.toLocaleString()}`);
-console.log(`  Successful: ${successfulRequests.toLocaleString()} (${((successfulRequests / totalRequests) * 100).toFixed(2)}%)`);
-console.log(`  Errors: ${totalErrors.toLocaleString()} (${errorRate}%)`);
-console.log(`  Median Latency: ${httpLatency.median || httpLatency.p50 || 0} ms`);
-console.log(`  Throughput: ${throughput} req/s`);
-console.log(`  CPU (Avg/Peak): ${systemMetrics.avgCpu}% / ${systemMetrics.peakCpu}%`);
-console.log(`  Memory (Avg/Peak): ${systemMetrics.avgMemory} MB / ${systemMetrics.peakMemory} MB`);
+</html>
