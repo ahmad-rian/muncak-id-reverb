@@ -54,20 +54,26 @@ return [
                 'secret' => env('REVERB_APP_SECRET'),
                 'app_id' => env('REVERB_APP_ID'),
                 'allowed_origins' => ['*'],
-                'ping_interval' => env('REVERB_SERVER_PING_INTERVAL', 30),
+                'ping_interval' => env('REVERB_SERVER_PING_INTERVAL', 15),
                 'max_message_size' => env('REVERB_MAX_REQUEST_SIZE', 10000),
+
+                // ✅ FIX: Connection stability settings
+                'app_connection_timeout' => env('REVERB_APP_CONNECTION_TIMEOUT', 30),
+                'app_read_timeout' => env('REVERB_APP_READ_TIMEOUT', 30),
+                'app_write_timeout' => env('REVERB_APP_WRITE_TIMEOUT', 30),
                 'options' => [
                     'host' => env('REVERB_HOST'),
                     'port' => env('REVERB_PORT', 443),
                     'scheme' => env('REVERB_SCHEME', 'https'),
                     'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
                 ],
-                // ✅ OPTIMIZATION: Connection limits
+                // ✅ OPTIMIZATION: Aggressive connection limits for stability
                 'capacity' => [
-                    'max_connections' => env('REVERB_MAX_CONNECTIONS', 10000),
-                    'max_backend_events_per_sec' => env('REVERB_MAX_BACKEND_EVENTS_PER_SEC', 1000),
-                    'max_client_messages_per_sec' => env('REVERB_MAX_CLIENT_MESSAGES_PER_SEC', 100),
-                    'max_read_buffer' => env('REVERB_MAX_READ_BUFFER', 10240),
+                    'max_connections' => env('REVERB_MAX_CONNECTIONS', 50000),
+                    'max_backend_events_per_sec' => env('REVERB_MAX_BACKEND_EVENTS_PER_SEC', 5000),
+                    'max_client_messages_per_sec' => env('REVERB_MAX_CLIENT_MESSAGES_PER_SEC', 500),
+                    'max_read_buffer' => env('REVERB_MAX_READ_BUFFER', 102400),
+                    'max_write_buffer' => env('REVERB_MAX_WRITE_BUFFER', 102400),
                 ],
             ],
         ],
