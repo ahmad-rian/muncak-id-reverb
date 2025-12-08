@@ -24,7 +24,9 @@ let durationInterval = null;
 let reverbReady = false; // Track Reverb connection status
 let channelSubscription = null; // Store channel reference
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 5;
+const MAX_RECONNECT_ATTEMPTS = 10; // Increased from 5
+let subscriptionQueue = []; // Queue for failed subscriptions
+let isSubscribing = false; // Prevent concurrent subscription attempts
 
 console.log('🎥 LiveKit Broadcaster starting...');
 console.log('Stream ID:', streamId);
@@ -42,14 +44,53 @@ if (!echo) {
 function subscribeToChannel() {
     if (channelSubscription) {
         console.log('📡 Already subscribed to channel');
-        return;
+        return true;
     }
 
-    console.log('📡 Subscribing to Reverb channel:', `stream.${streamId}`);
-    channelSubscription = echo.channel(`stream.${streamId}`);
+    if (isSubscribing) {
+        console.log('⏳ Subscription already in progress, queueing...');
+        if (!subscriptionQueue.includes('subscribe')) {
+            subscriptionQueue.push('subscribe');
+        }
+        return false;
+    }
+
+    if (!reverbReady) {
+        console.log('⏳ Waiting for Reverb connection, queueing...');
+        if (!subscriptionQueue.includes('subscribe')) {
+            subscriptionQueue.push('subscribe');
+        }
+        return false;
+    }
+
+    isSubscribing = true;
     
-    // Setup channel event listeners
-    setupChannelListeners();
+    try {
+        console.log('📡 Subscribing to Reverb channel:', `stream.${streamId}`);
+        channelSubscription = echo.channel(`stream.${streamId}`);
+        
+        // Setup channel event listeners
+        setupChannelListeners();
+        
+        console.log('✅ Successfully subscribed to channel');
+        subscriptionQueue = []; // Clear queue on success
+        isSubscribing = false;
+        return true;
+    } catch (err) {
+        console.error('❌ Failed to subscribe:', err);
+        channelSubscription = null;
+        isSubscribing = false;
+        
+        // Retry after delay if not too many attempts
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            console.log('🔄 Will retry subscription in 1 second...');
+            setTimeout(() => {
+                subscribeToChannel();
+            }, 1000);
+        }
+        
+        return false;
+    }
 }
 
 // Reverb connection status with retry logic
@@ -58,8 +99,15 @@ echo.connector.pusher.connection.bind('connected', () => {
     reverbReady = true;
     reconnectAttempts = 0;
     
-    // Subscribe to channel after connection is ready
-    subscribeToChannel();
+    // Process queued subscriptions
+    if (subscriptionQueue.length > 0) {
+        console.log('🔄 Processing queued subscription...');
+        subscriptionQueue = [];
+        subscribeToChannel();
+    } else {
+        // Subscribe to channel after connection is ready
+        subscribeToChannel();
+    }
 });
 
 echo.connector.pusher.connection.bind('unavailable', () => {
@@ -74,7 +122,7 @@ echo.connector.pusher.connection.bind('failed', () => {
     // Attempt reconnection with exponential backoff
     if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts++;
-        const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        const backoffDelay = Math.min(500 * Math.pow(1.5, reconnectAttempts), 10000); // Start from 500ms, max 10s
         console.log(`🔄 Reconnecting to Reverb in ${backoffDelay}ms (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
         
         setTimeout(() => {
@@ -675,11 +723,4 @@ initializeCamera();
 loadChatHistory();
 }
 
-// Reverb connection status
-echo.connector.pusher.connection.bind('connected', () => {
-    console.log('✅ Connected to Reverb');
-});
-
-echo.connector.pusher.connection.bind('error', (err) => {
-    console.error('❌ Reverb connection error:', err);
-});
+// ✅ FIX: Removed duplicate event listeners (already bound above at line 47-100)
