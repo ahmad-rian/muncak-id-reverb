@@ -13,28 +13,67 @@ return new class extends Migration
     {
         // Streams Table Indexes - Performance optimization
         Schema::table('streams', function (Blueprint $table) {
-            $table->index('status');
-            $table->index('viewer_count');
-            $table->index('started_at');
-            $table->index('jalur_id');
-            $table->index('mountain_id');
-            $table->index(['status', 'viewer_count']); // Composite for filtering
-            $table->index(['status', 'started_at']); // Composite for ordering live streams
+            // Check if index exists before creating
+            if (!$this->indexExists('streams', 'streams_status_index')) {
+                $table->index('status');
+            }
+            if (!$this->indexExists('streams', 'streams_viewer_count_index')) {
+                $table->index('viewer_count');
+            }
+            if (!$this->indexExists('streams', 'streams_started_at_index')) {
+                $table->index('started_at');
+            }
+            if (!$this->indexExists('streams', 'streams_jalur_id_index')) {
+                $table->index('jalur_id');
+            }
+            if (!$this->indexExists('streams', 'streams_mountain_id_index')) {
+                $table->index('mountain_id');
+            }
+            if (!$this->indexExists('streams', 'streams_status_viewer_count_index')) {
+                $table->index(['status', 'viewer_count']);
+            }
+            if (!$this->indexExists('streams', 'streams_status_started_at_index')) {
+                $table->index(['status', 'started_at']);
+            }
         });
 
         // Chat Messages Table Indexes
         Schema::table('chat_messages', function (Blueprint $table) {
-            $table->index('stream_id');
-            $table->index('created_at');
-            $table->index(['stream_id', 'created_at']); // Composite for chat history queries
+            if (!$this->indexExists('chat_messages', 'chat_messages_stream_id_index')) {
+                $table->index('stream_id');
+            }
+            if (!$this->indexExists('chat_messages', 'chat_messages_created_at_index')) {
+                $table->index('created_at');
+            }
+            if (!$this->indexExists('chat_messages', 'chat_messages_stream_id_created_at_index')) {
+                $table->index(['stream_id', 'created_at']);
+            }
         });
 
         // Trail Classifications Table Indexes
         Schema::table('trail_classifications', function (Blueprint $table) {
-            $table->index('stream_id');
-            $table->index('classified_at');
-            $table->index(['stream_id', 'classified_at']); // Composite for latest classification
+            if (!$this->indexExists('trail_classifications', 'trail_classifications_stream_id_index')) {
+                $table->index('stream_id');
+            }
+            if (!$this->indexExists('trail_classifications', 'trail_classifications_classified_at_index')) {
+                $table->index('classified_at');
+            }
+            if (!$this->indexExists('trail_classifications', 'trail_classifications_stream_id_classified_at_index')) {
+                $table->index(['stream_id', 'classified_at']);
+            }
         });
+    }
+
+    /**
+     * Check if index exists
+     */
+    private function indexExists(string $table, string $index): bool
+    {
+        $connection = Schema::getConnection();
+        $doctrineSchemaManager = $connection->getDoctrineSchemaManager();
+        $doctrineTable = $doctrineSchemaManager->introspectTable($table);
+
+        return $doctrineTable->hasIndex($index);
     }
 
     /**
